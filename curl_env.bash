@@ -7,28 +7,33 @@ function curl_env ()
 {
 
 	#
+	declare __curl_env_locv_{fnc,tmp,ent,var,val,tag}=
+	__curl_env_locv_fnc="${FUNCNAME[0]:-}"
+	__curl_env_locv_tag="${RANDOM}${SECONDS}"
+
+	#
 	export CURL_ENV_DEBUG="${CURL_ENV_DEBUG:-0}"
 	export curl_env_{dbg,ext,hin,hdr,out,err}=
-	for VAR in curl_env_{dbg,ext,hin,hdr,out,err}
+	for __curl_env_locv_var in curl_env_{dbg,ext,hin,hdr,out,err}
 	do
-		eval "${VAR}=()"
+		eval "${__curl_env_locv_var}=()"
 	done
 
 	#
-	declare curl_env_flg_{help,init}=0
-	for ENT in "${@:-}"
+	declare __curl_env_locv_flg_{help,init}=0
+	for __curl_env_locv_ent in "${@:-}"
 	do
-		case "${ENT}" in
-		( -h* | --help )  curl_env_flg_help=1;;
-		( --curl-help )   curl_env_flg_help=2;;
-		( --curl-manual ) curl_env_flg_help=3;;
-		( --init )        curl_env_flg_init=1;;
+		case "${__curl_env_locv_ent}" in
+		( -h* | --help )  __curl_env_locv_flg_help=1;;
+		( --curl-help )   __curl_env_locv_flg_help=2;;
+		( --curl-manual ) __curl_env_locv_flg_help=3;;
+		( --init )        __curl_env_locv_flg_init=1;;
 		esac
 	done
-	[ "${#@}" -ne 0 ] ||      curl_env_flg_help=1
+	[ "${#@}" -ne 0 ] ||      __curl_env_locv_flg_help=1
 
 	#
-	[ "${curl_env_flg_init:-0}" -eq 0 ] \
+	[ "${__curl_env_locv_flg_init:-0}" -eq 0 ] \
 	|| {
 		[ "${BASH_SOURCE[0]}" != "${0}" -a "${#BASH_SOURCE[@]}" -ne 0 ] \
 		|| {
@@ -40,11 +45,11 @@ function curl_env ()
 	}
 
 	#
-	[ "${curl_env_flg_help:-0}" -eq 0 ] \
+	[ "${__curl_env_locv_flg_help:-0}" -eq 0 ] \
 	|| {
-		[ "${curl_env_flg_help:-0}" -lt 2 ] || { curl --help; }
-		[ "${curl_env_flg_help:-0}" -lt 3 ] || { curl --manual; }
-		[ "${curl_env_flg_help:-0}" -gt 1 ] \
+		[ "${__curl_env_locv_flg_help:-0}" -lt 2 ] || { curl --help; }
+		[ "${__curl_env_locv_flg_help:-0}" -lt 3 ] || { curl --manual; }
+		[ "${__curl_env_locv_flg_help:-0}" -gt 1 ] \
 		|| {
 		sed "s/^/  /" <<-'EOF'
 
@@ -70,6 +75,8 @@ function curl_env ()
 
 		If you *do* pipe this command, it will echo its output for use on stdin to other commands.
 
+		{ curl_env icanhazip.com | __YOUR_PARSER__; }
+
 		NOTE: Only run curl_env against *one* URL at a time. ( For now.. =] )
 
 		###
@@ -78,54 +85,50 @@ function curl_env ()
 	} 2>&1
 
 	#
-	declare {TMP,ENT,TAG}=
-	declare TAG="${RANDOM}${SECONDS}"
-
-	#
-	for VAR in CURL_{DBG,CMD,RAW}
+	for __curl_env_locv_var in __curl_env_locv_cmd{,_{dbg,raw}}
 	do
-		eval "declare ${VAR}=()"
+		eval "declare ${__curl_env_locv_var}=()"
 	done
-	CURL_RAW=(
+	__curl_env_locv_cmd_raw=(
 		curl
 		-sv
 		"${@:-}"
 	)
 
 	[ "${CURL_ENV_DEBUG:-0}" -lt 9 ] || echo 1>&2
-	for ENT in "${CURL_RAW[@]}"
+	for __curl_env_locv_ent in "${__curl_env_locv_cmd_raw[@]}"
 	do
-		TMP=
+		__curl_env_locv_tmp=
 		[ "${CURL_ENV_DEBUG:-0}" -lt 9 ] || \
-		printf "{ %q }\n" "${ENT}" 1>&2
-		printf -v ENT "%q" "${ENT}"
-		CURL_CMD[${#CURL_CMD[@]}]="${ENT}"
-		[[ "${ENT}" =~ \\ ]] || \
-		{ CURL_DBG[${#CURL_DBG[@]}]="${ENT}"; continue; }
-		while [[ "${ENT}" =~ ([^\\]*)([\\])(.)(.*) ]]
+		printf "{ %q }\n" "${__curl_env_locv_ent}" 1>&2
+		printf -v __curl_env_locv_ent "%q" "${__curl_env_locv_ent}"
+		__curl_env_locv_cmd[${#__curl_env_locv_cmd[@]}]="${__curl_env_locv_ent}"
+		[[ "${__curl_env_locv_ent}" =~ \\ ]] || \
+		{ __curl_env_locv_cmd_dbg[${#__curl_env_locv_cmd_dbg[@]}]="${__curl_env_locv_ent}"; continue; }
+		while [[ "${__curl_env_locv_ent}" =~ ([^\\]*)([\\])(.)(.*) ]]
 		do
-			TMP="${TMP}${BASH_REMATCH[1]}"
+			__curl_env_locv_tmp="${__curl_env_locv_tmp}${BASH_REMATCH[1]}"
 			[ "${BASH_REMATCH[3]}" != "\"" ] || \
-			TMP="${TMP}\\"
-			TMP="${TMP}${BASH_REMATCH[3]}"
-			ENT="${BASH_REMATCH[4]}"
+			__curl_env_locv_tmp="${__curl_env_locv_tmp}\\"
+			__curl_env_locv_tmp="${__curl_env_locv_tmp}${BASH_REMATCH[3]}"
+			__curl_env_locv_ent="${BASH_REMATCH[4]}"
 			[ "${CURL_ENV_DEBUG:-0}" -lt 9 ] || \
-			printf "( %s ) ( %s )\n" "${ENT}" "${TMP}" 1>&2
+			printf "( %s ) ( %s )\n" "${__curl_env_locv_ent}" "${__curl_env_locv_tmp}" 1>&2
 		done
-		CURL_DBG[${#CURL_DBG[@]}]='"'"${TMP}${ENT}"'"'
+		__curl_env_locv_cmd_dbg[${#__curl_env_locv_cmd_dbg[@]}]='"'"${__curl_env_locv_tmp}${__curl_env_locv_ent}"'"'
 	done
 
 	[ "${CURL_ENV_DEBUG:-0}" -lt 9 ] || echo 1>&2
 	[ "${CURL_ENV_DEBUG:-0}" -lt 1 ] || \
-	echo "+ ${CURL_DBG[*]}" 1>&2
+	echo "+ ${__curl_env_locv_cmd_dbg[*]}" 1>&2
 	[ "${CURL_ENV_DEBUG:-0}" -lt 8 ] || echo 1>&2
 
-	TMP="$(
+	__curl_env_locv_tmp="$(
 		printf -v NLN "\n"
 		printf -v CRT "\r"
 		IFS="${NLN}"
 		{
-			eval "${CURL_CMD[@]}" \
+			eval "${__curl_env_locv_cmd[@]}" \
 				-o >( while read -r ENT; do echo "1 ${ENT}"; done ) \
 				2> >( while read -r ENT; do echo "2 ${ENT}"; done )
 			echo "3 ${?}"
@@ -160,7 +163,7 @@ function curl_env ()
 		}
 	)"
 
-	eval "${TMP}"
+	eval "${__curl_env_locv_tmp}"
 
 	[ "${CURL_ENV_DEBUG}" -lt 4 ] || { echo; printf "* %s\n" "${curl_env_dbg[@]}"; } 1>&2
 	[ "${CURL_ENV_DEBUG}" -lt 5 ] || { printf "! %s\n" "${curl_env_ext[@]}"; } 1>&2
