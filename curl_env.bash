@@ -44,8 +44,24 @@ function curl_env ()
 	|| {
 		[ "${curl_env_flg_help:-0}" -lt 2 ] || { curl --help; }
 		[ "${curl_env_flg_help:-0}" -lt 3 ] || { curl --manual; }
-		printf "\n###\n\n"
+		[ "${curl_env_flg_help:-0}" -gt 1 ] \
+		|| {
 		sed "s/^/  /" <<-'EOF'
+
+		###
+
+		To view curl help or manual, provide these options to CURL_ENV..
+		
+		--curl-help
+
+		--curl-manual
+
+		EOF
+		}
+		sed "s/^/  /" <<-'EOF'
+
+		###
+
 		The CURL_ENV function sets global shell variables, and therefore must not be run in a subshell.
 
 		Instead, you may do something like this..
@@ -54,9 +70,10 @@ function curl_env ()
 
 		If you *do* pipe this command, it will echo its output for use on stdin to other commands.
 
-		NOTE: Only run curl_env against *one* URL at a time. =]
+		NOTE: Only run curl_env against *one* URL at a time. ( For now.. =] )
+
+		###
 		EOF
-		printf "\n\n###\n"
 		return 0
 	} 2>&1
 
