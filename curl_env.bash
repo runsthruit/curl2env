@@ -1,18 +1,13 @@
 #! /bin/bash
 
-[ "${BASH_SOURCE[0]}" != "${0}" -a "${#BASH_SOURCE[@]}" -ne 0 ] \
-|| {
-	printf "${BASH_SOURCE[0]:-${0:-}}: %s\n" \
-		"This code was made for sourcin'!"
-	exit 1
-}
-
 function curl_env ()
 #
 #
 #
 {
+
 	#
+	export CURL_ENV_DEBUG="${CURL_ENV_DEBUG:-0}"
 	export curl_env_{dbg,ext,hin,hdr,out,err}=
 	for VAR in curl_env_{dbg,ext,hin,hdr,out,err}
 	do
@@ -20,31 +15,52 @@ function curl_env ()
 	done
 
 	#
+	declare curl_env_flg_{help,init}=0
 	for ENT in "${@:-}"
 	do
 		case "${ENT}" in
 		( -h* | --help )  curl_env_flg_help=1;;
 		( --curl-help )   curl_env_flg_help=2;;
 		( --curl-manual ) curl_env_flg_help=3;;
+		( --init )        curl_env_flg_init=1;;
 		esac
 	done
+	[ "${#@}" -ne 0 ] ||      curl_env_flg_help=1
+
+	#
+	[ "${curl_env_flg_init:-0}" -eq 0 ] \
+	|| {
+		[ "${BASH_SOURCE[0]}" != "${0}" -a "${#BASH_SOURCE[@]}" -ne 0 ] \
+		|| {
+			printf "${BASH_SOURCE[0]:-${0:-}}: %s\n" \
+			"This code was made for sourcin'!"
+			return 1
+		}
+		return 0
+	}
 
 	#
 	[ "${curl_env_flg_help:-0}" -eq 0 ] \
-	|| { {
-		printf "\n"
-		printf "${FUNCNAME[0]:-${BASH_SOURCE[0]:-${0:-}}}: %s\n" \
-		"This function sets global shell variables," \
-		"and therefore must not be run in a subshell." \
-		"Do not pipe the output of this function." \
-		"Instead, you may do something like this.." \
-		"{ TMP=\"\$( curl_env icanhazip.com )\"; echo \"\${TMP}\" | __YOUR_PARSER__; }" \
-		"NOTE: Only run curl_env against *one* URL at a time. =]"
-		printf "\n"
-	} 1>&2; return 1; }
+	|| {
+		[ "${curl_env_flg_help:-0}" -lt 2 ] || { curl --help; }
+		[ "${curl_env_flg_help:-0}" -lt 3 ] || { curl --manual; }
+		printf "\n###\n\n"
+		sed "s/^/  /" <<-'EOF'
+		The CURL_ENV function sets global shell variables, and therefore must not be run in a subshell.
+
+		Instead, you may do something like this..
+
+		{ TMP="$( curl_env icanhazip.com )"; echo "${TMP}" | __YOUR_PARSER__; }
+
+		If you *do* pipe this command, it will echo its output for use on stdin to other commands.
+
+		NOTE: Only run curl_env against *one* URL at a time. =]
+		EOF
+		printf "\n\n###\n"
+		return 0
+	} 2>&1
 
 	#
-	declare CURL_ENV_DEBUG="${CURL_ENV_DEBUG:-0}"
 	declare {TMP,ENT,TAG}=
 	declare TAG="${RANDOM}${SECONDS}"
 
@@ -141,3 +157,5 @@ function curl_env ()
 	return ${curl_env_ext[0]:-100}
 
 }
+
+curl_env --init
