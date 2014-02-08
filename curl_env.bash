@@ -7,11 +7,12 @@ function curl_env ()
 {
 
 	#
-	declare __curl_env_locv_{fnc,tmp,ent,var,val,tag,chr_{nln,crt}}=
+	declare __curl_env_locv_{fnc,tmp,ent,var,val,tag,chr_{tab,nln,crt}}=
 	for __curl_env_locv_var in __curl_env_locv_{opts,write_vars,cmd{,_{dbg,raw}}}
 	do
 		eval "declare ${__curl_env_locv_var}=()"
 	done
+	printf -v __curl_env_locv_chr_tab "\t"
 	printf -v __curl_env_locv_chr_nln "\n"
 	printf -v __curl_env_locv_chr_crt "\r"
 	__curl_env_locv_fnc="${FUNCNAME[0]:-}"
@@ -181,7 +182,7 @@ function curl_env ()
 				( 2 ) {
 					__curl_env_locv_ent="${__curl_env_locv_ent%${__curl_env_locv_chr_crt}}"
 					case "${BASH_REMATCH[3]:-}" in
-					( "*" ) {
+					( "*" | " " | "${__curl_env_locv_chr_tab}" ) {
 						[ "${__curl_env_locv_ent:4}" == "" ] \
 						|| curl_env_dbg[${#curl_env_dbg[@]}]="${__curl_env_locv_ent:4}"
 					};;
