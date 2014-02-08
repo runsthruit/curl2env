@@ -161,6 +161,8 @@ function curl_env ()
 	__curl_env_locv_tmp="$(
 		IFS="${__curl_env_locv_chr_nln}"
 		{
+			{ [ -t 0 ] && cat /dev/null || cat -; } |
+			tee >( { [ "${DEBUG_CURL_ENV}" -lt 8 ] && cat - >/dev/null || { sed "s/^/0 /" | cat -vet; } 1>&2; } ) |
 			eval "${__curl_env_locv_cmd[@]}" \
 				-w "\"$( printf "2 = %s=%%{%s}\\\n" $( for I in "${__curl_env_locv_write_vars[@]}"; do echo "${I}"; echo "${I}"; done ) )\"" \
 				-o >( sed "s=^=1 . =" ) \
