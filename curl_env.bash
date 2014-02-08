@@ -159,7 +159,7 @@ function curl_env ()
 		IFS="${__curl_env_locv_chr_nln}"
 		{
 			eval "${__curl_env_locv_cmd[@]}" \
-				-w "\"$( printf "2 = %s %%{%s}\\\n" $( for I in "${__curl_env_locv_write_vars[@]}"; do echo "${I}"; echo "${I}"; done ) )\"" \
+				-w "\"$( printf "2 = %s=%%{%s}\\\n" $( for I in "${__curl_env_locv_write_vars[@]}"; do echo "${I}"; echo "${I}"; done ) )\"" \
 				-o >( sed "s=^=1 . =" ) \
 				2> >( sed "s=^=2 =" )
 			echo "3 ${?}"
