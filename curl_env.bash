@@ -7,9 +7,11 @@ function curl_env ()
 {
 
 	#
-	declare __curl_env_locv_{fnc,tmp,ent,var,val,tag}=
+	declare __curl_env_locv_{fnc,tmp,ent,var,val,tag,chr_{nln,crt}}=
 	__curl_env_locv_fnc="${FUNCNAME[0]:-}"
 	__curl_env_locv_tag="${RANDOM}${SECONDS}"
+	printf -v __curl_env_locv_chr_nln "\n"
+	printf -v __curl_env_locv_chr_crt "\r"
 
 	#
 	export CURL_ENV_DEBUG="${CURL_ENV_DEBUG:-0}"
@@ -124,41 +126,39 @@ function curl_env ()
 	[ "${CURL_ENV_DEBUG:-0}" -lt 8 ] || echo 1>&2
 
 	__curl_env_locv_tmp="$(
-		printf -v NLN "\n"
-		printf -v CRT "\r"
-		IFS="${NLN}"
+		IFS="${__curl_env_locv_chr_nln}"
 		{
 			eval "${__curl_env_locv_cmd[@]}" \
-				-o >( while read -r ENT; do echo "1 ${ENT}"; done ) \
-				2> >( while read -r ENT; do echo "2 ${ENT}"; done )
+				-o >( while read -r __curl_env_locv_ent; do echo "1 ${__curl_env_locv_ent}"; done ) \
+				2> >( while read -r __curl_env_locv_ent; do echo "2 ${__curl_env_locv_ent}"; done )
 			echo "3 ${?}"
 		} |
 		tee >( { [ "${CURL_ENV_DEBUG}" -lt 8 ] && cat - >/dev/null || cat -vet 1>&2; } ) |
 		{
-			while read -r ENT
+			while read -r __curl_env_locv_ent
 			do
-				[[ "${ENT}" =~ ^([123])(.?)(.?)(.?)(.*)$ ]] || :
+				[[ "${__curl_env_locv_ent}" =~ ^([123])(.?)(.?)(.?)(.*)$ ]] || :
 				case "${BASH_REMATCH[1]:-}" in
-				( 3 ) curl_env_ext[${#curl_env_ext[@]}]="${ENT:2:1}";;
-				( 1 ) curl_env_out[${#curl_env_out[@]}]="${ENT:2}";;
+				( 3 ) curl_env_ext[${#curl_env_ext[@]}]="${__curl_env_locv_ent:2:1}";;
+				( 1 ) curl_env_out[${#curl_env_out[@]}]="${__curl_env_locv_ent:2}";;
 				( 2 ) {
-					ENT="${ENT%${CRT}}"
+					__curl_env_locv_ent="${__curl_env_locv_ent%${__curl_env_locv_chr_crt}}"
 					case "${BASH_REMATCH[3]:-}" in
-					( "*" ) curl_env_dbg[${#curl_env_dbg[@]}]="${ENT:4}";;
-					( "<" ) [ "${ENT:4}" == "" ] || curl_env_hdr[${#curl_env_hdr[@]}]="${ENT:4}";;
-					( ">" ) [ "${ENT:4}" == "" ] || curl_env_hin[${#curl_env_hin[@]}]="${ENT:4}";;
+					( "*" ) curl_env_dbg[${#curl_env_dbg[@]}]="${__curl_env_locv_ent:4}";;
+					( "<" ) [ "${__curl_env_locv_ent:4}" == "" ] || curl_env_hdr[${#curl_env_hdr[@]}]="${__curl_env_locv_ent:4}";;
+					( ">" ) [ "${__curl_env_locv_ent:4}" == "" ] || curl_env_hin[${#curl_env_hin[@]}]="${__curl_env_locv_ent:4}";;
 					( "{" ) :;;
-					( * ) { curl_env_err[${#curl_env_err[@]}]="${ENT:2}"; echo "? ${ENT:2}" 1>&2; };;
+					( * ) { curl_env_err[${#curl_env_err[@]}]="${__curl_env_locv_ent:2}"; echo "? ${__curl_env_locv_ent:2}" 1>&2; };;
 					esac
 				};;
 				esac
 			done
-			for VAR in curl_env_{dbg,ext,hin,hdr,out,err}
+			for __curl_env_locv_var in curl_env_{dbg,ext,hin,hdr,out,err}
 			do
-				VAL="$( declare -p ${VAR} )"
-				VAL="${VAL#*\'}"
-				VAL="${VAL%\'*}"
-				echo "${VAR}=${VAL}"
+				__curl_env_locv_val="$( declare -p ${__curl_env_locv_var} )"
+				__curl_env_locv_val="${__curl_env_locv_val#*\'}"
+				__curl_env_locv_val="${__curl_env_locv_val%\'*}"
+				echo "${__curl_env_locv_var}=${__curl_env_locv_val}"
 			done
 		}
 	)"
