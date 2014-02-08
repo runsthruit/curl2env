@@ -135,19 +135,21 @@ function curl_env ()
 		printf "{ %q }\n" "${__curl_env_locv_ent}" 1>&2
 		printf -v __curl_env_locv_ent "%q" "${__curl_env_locv_ent}"
 		__curl_env_locv_cmd[${#__curl_env_locv_cmd[@]}]="${__curl_env_locv_ent}"
-		[[ "${__curl_env_locv_ent}" =~ \\ ]] || \
+		[[ "${__curl_env_locv_ent}" =~ \\ && ! "${__curl_env_locv_ent}" =~ ^"$'" ]] || \
 		{ __curl_env_locv_cmd_dbg[${#__curl_env_locv_cmd_dbg[@]}]="${__curl_env_locv_ent}"; continue; }
 		while [[ "${__curl_env_locv_ent}" =~ ([^\\]*)([\\])(.)(.*) ]]
 		do
 			__curl_env_locv_tmp="${__curl_env_locv_tmp}${BASH_REMATCH[1]}"
-			[ "${BASH_REMATCH[3]}" != "\"" ] || \
+			[ "${BASH_REMATCH[3]}" != "'" ] || \
 			__curl_env_locv_tmp="${__curl_env_locv_tmp}\\"
 			__curl_env_locv_tmp="${__curl_env_locv_tmp}${BASH_REMATCH[3]}"
 			__curl_env_locv_ent="${BASH_REMATCH[4]}"
 			[ "${DEBUG_CURL_ENV:-0}" -lt 9 ] || \
 			printf "( %s ) ( %s )\n" "${__curl_env_locv_ent}" "${__curl_env_locv_tmp}" 1>&2
 		done
-		__curl_env_locv_cmd_dbg[${#__curl_env_locv_cmd_dbg[@]}]='"'"${__curl_env_locv_tmp}${__curl_env_locv_ent}"'"'
+		[ "${DEBUG_CURL_ENV:-0}" -lt 9 ] || \
+		printf "{ %s }\n" "'${__curl_env_locv_tmp}${__curl_env_locv_ent}'" 1>&2
+		__curl_env_locv_cmd_dbg[${#__curl_env_locv_cmd_dbg[@]}]="'${__curl_env_locv_tmp}${__curl_env_locv_ent}'"
 	done
 
 	[ "${DEBUG_CURL_ENV:-0}" -lt 9 ] || echo 1>&2
@@ -195,7 +197,7 @@ function curl_env ()
 						[ "${__curl_env_locv_ent:4}" == "" ] \
 						|| curl_env_hin[${#curl_env_hin[@]}]="${__curl_env_locv_ent:4}"
 					};;
-					( "{" ) :;;
+					( "{" | "}" ) :;;
 					( * ) {
 						curl_env_err[${#curl_env_err[@]}]="${__curl_env_locv_ent:2}"
 						echo "? ${__curl_env_locv_ent:2}" 1>&2
