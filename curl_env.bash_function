@@ -236,4 +236,4 @@ function curl_env ()
 
 }
 
-curl_env --init ${@:+"${@}"}
+: BASH_FUNCTION_INIT; I="${BASH_SOURCE[0]##*/}" && ${I%.*} --init ${@:+"${@}"}
