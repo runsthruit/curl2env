@@ -191,18 +191,21 @@ function curl_env ()
 
 	eval "${TMP}"
 
+	[ "${DBG:-0}" -gt 7 ] || {
 	[ "${DBG:-0}" -lt 4 ] || { echo; printf "* %s\n" "${curl_env_dbg[@]}"; } 1>&2
 	[ "${DBG:-0}" -lt 5 ] || { printf "! %s\n" "${curl_env_ext[@]}"; } 1>&2
 	[ "${DBG:-0}" -lt 6 ] || { echo; printf "= %s\n" "${curl_env_stt[@]}"; } 1>&2
 	[ "${DBG:-0}" -lt 3 ] \
 	&& { echo "${curl_env_hdr[0]:-HEADER_ERROR}"; } 1>&2 \
 	|| {
-		echo; printf "> %s\n" "${curl_env_hin[@]}";
-		echo; printf "< %s\n" "${curl_env_hdr[@]}"; echo;
+		echo; printf "> %s\n" "${curl_env_hin[@]}"
+		echo; printf "< %s\n" "${curl_env_hdr[@]}"
 	} 1>&2
-	[ "${DBG:-0}" -lt 2 -a -t 1 -a "${OPT_exec:-0}" -eq 0 ] || printf "%s\n" "${curl_env_out[@]}"
 	[ "${DBG:-0}" -lt 5 -o "${#curl_env_err[*]}" -eq 0 ] \
 	|| { echo; printf "? %s\n" "${curl_env_err[@]}"; } 1>&2
+	}
+	[ "${DBG:-0}" -lt 3 ] || { echo; } 1>&2
+	[ "${DBG:-0}" -lt 2 -a -t 1 -a "${OPT_exec:-0}" -eq 0 ] || printf "%s\n" "${curl_env_out[@]}"
 
 	return ${curl_env_ext[0]:-100}
 
