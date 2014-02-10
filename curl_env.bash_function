@@ -65,10 +65,6 @@ function curl_env ()
 		
 		  Only run a single call at a time. ( For now.. =] )
 
-		  To force the usage of this function from within its source ( as a script )..
-
-		    --bash_function_exec
-
 		EOF
 		return 0
 	}
@@ -209,7 +205,7 @@ function curl_env ()
 	|| { echo; printf "? %s\n" "${curl_env_err[@]}"; } 1>&2
 	}
 	[ "${DBG:-0}" -lt 3 ] || { echo; } 1>&2
-	[ "${DBG:-0}" -lt 2 -a -t 1 -a "${OPT_exec:-0}" -eq 0 ] || printf "%s\n" "${curl_env_out[@]}"
+	[ "${DBG:-0}" -lt 2 -a -t 1 -a "${BASH_FUNCTION_EXEC:-0}" -eq 0 ] || printf "%s\n" "${curl_env_out[@]}"
 
 	return ${curl_env_ext[0]:-100}
 
