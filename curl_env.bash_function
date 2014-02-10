@@ -77,13 +77,17 @@ function curl_env ()
 
 	#
 	WVARS=(
-		url_effective http_code http_connect
-		time_total time_namelookup time_connect time_appconnect
+		http_code
+		url_effective redirect_url
+		http_connect
+		time_total
+		time_namelookup time_connect time_appconnect
 		time_pretransfer time_redirect time_starttransfer
 		size_download size_upload size_header size_request
 		speed_download speed_upload
-		content_type num_connects
-		num_redirects redirect_url ftp_entry_path ssl_verify_result
+		content_type
+		num_connects num_redirects
+		ftp_entry_path ssl_verify_result
 	)
 
 	#
@@ -196,7 +200,7 @@ function curl_env ()
 	[ "${DBG:-0}" -lt 5 ] || { printf "! %s\n" "${curl_env_ext[@]}"; } 1>&2
 	[ "${DBG:-0}" -lt 6 ] || { echo; printf "= %s\n" "${curl_env_stt[@]}"; } 1>&2
 	[ "${DBG:-0}" -lt 3 ] \
-	&& { echo "${curl_env_hdr[0]:-HEADER_ERROR}"; } 1>&2 \
+	&& { echo "${curl_env_hdr[0]:-ERR_NO_HEADERS}"; } 1>&2 \
 	|| {
 		echo; printf "> %s\n" "${curl_env_hin[@]}"
 		echo; printf "< %s\n" "${curl_env_hdr[@]}"
