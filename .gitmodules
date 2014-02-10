@@ -1,0 +1,3 @@
+[submodule "modules/bash_function_init"]
+	path = modules/bash_function_init
+	url = https://github.com/runsthruit/bash_function_init.git
