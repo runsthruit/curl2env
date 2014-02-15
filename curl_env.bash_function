@@ -22,7 +22,7 @@ function curl_env ()
 		curl_env_{dbg,ext,hin,hdr,out,err,stt}
 	)
 
-	: BASH_FUNCTION_INIT SOURCE; eval "$( bash_function_init --source || echo return 1 )"
+	: BASH_FUNCTION_INIT SOURCE; eval "$( bash_function_init || echo return 1 )"
 
 	#
 	[ "${OPT_help:-0}" -eq 0 -a "${OPT_manual:-0}" -eq 0 ] \
