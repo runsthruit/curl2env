@@ -179,13 +179,7 @@ function curl_env ()
 				};;
 				esac
 			done
-			for VAR in curl_env_{dbg,ext,hin,hdr,out,err,stt}
-			do
-				VAL="$( declare -p ${VAR} )"
-				VAL="${VAL#*\'}"
-				VAL="${VAL%\'*}"
-				echo "${VAR}=${VAL}"
-			done
+			declare -p curl_env_{dbg,ext,hin,hdr,out,err,stt}
 		}
 	)"
 
