@@ -13,7 +13,9 @@ function curl_env ()
 		out
 		curl_{help,manual}
 	)
-	__bash_function_init_locv_strings=()
+	__bash_function_init_locv_strings=(
+		CHR_{ESC,DBQ,SGQ}
+	)
 	__bash_function_init_locv_arrays=(
 		WVARS
 		CMD{,_{RAW,DBG}}
@@ -22,7 +24,6 @@ function curl_env ()
 	__bash_function_init_glbv_arrays=(
 		curl_env_{dbg,ext,hin,hdr,out,err,stt}
 	)
-
 	: BASH_FUNCTION_INIT SOURCE; eval "$( bash_function_init || echo return 1 )"
 
 	#
@@ -73,6 +74,9 @@ function curl_env ()
 	[ "${OPT_curl_manual}" -eq 0 ] || { curl --manual; return 0; }
 
 	#
+	CHR_ESC="\\"
+	CHR_DBQ="\""
+	CHR_SGQ="'"
 	WVARS=(
 		http_code
 		url_effective redirect_url
@@ -180,7 +184,14 @@ function curl_env ()
 				};;
 				esac
 			done
-			declare -p curl_env_{dbg,ext,hin,hdr,out,err,stt}
+			for VAR in curl_env_{dbg,ext,hin,hdr,out,err,stt}
+			do
+				VAL="$( declare -p ${VAR} )"
+				VAL="${VAL#*\'}"
+				VAL="${VAL%\'*}"
+				VAL="${VAL//\'\\\'\'/${CHR_SGQ}}"
+				echo "${VAR}=${VAL}"
+			done
 		}
 	)"
 
