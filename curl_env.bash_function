@@ -94,7 +94,7 @@ function curl_env ()
 	#
 	CMD_RAW=(
 		curl
-		-sv
+		-vs
 		${ARGS[@]:+"${ARGS[@]}"}
 	)
 
@@ -138,12 +138,14 @@ function curl_env ()
 		{
 			{ [ -t 0 ] && cat /dev/null || cat -; } |
 			tee >( { [ "${DBG:-0}" -lt 8 ] && cat - >/dev/null || { sed "s/^/0 /" | cat -vet; } 1>&2; } ) |
-			eval "${CMD[@]}" \
-				-w "\"$( printf "2 = %s=%%{%s}\\\n" $( for I in "${WVARS[@]}"; do echo "${I}"; echo "${I}"; done ) )\"" \
-				-o >( sed "s=^=1 . =" ) \
-				2> >( sed "s=^=2 =" )
-			echo "3 ${?}"
-		} |
+			{
+				eval "${CMD[@]}" \
+					-w "\"$( printf "2 = %s=%%{%s}\\\n" $( for I in "${WVARS[@]}"; do echo "${I}"; echo "${I}"; done ) )\"" \
+					-o >( sed "s=^=1 . =" ) \
+					2> >( sed "s=^=2 =" 1>&2 )
+			} 2>&1
+			echo "3 ${?}" 1>&2
+		} 2>&1 |
 		tee >( { [ "${DBG:-0}" -lt 8 ] && cat - >/dev/null || cat -vet - 1>&2; } ) |
 		{
 			while read -r ENT
