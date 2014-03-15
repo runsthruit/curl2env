@@ -30,6 +30,7 @@ function curl_env ()
 		curl_env_out
 		curl_env_err
 		curl_env_stt
+		curl_env_ssl
 	)
 	: BASH_FUNCTION_INIT SOURCE; eval "$( bash_function_init || echo return 1 )"
 
@@ -98,8 +99,8 @@ function curl_env ()
 	CHR_DBQ="\""
 	CHR_SGQ="'"
 	RGX_TIME="^([0-9]{2,2}:[0-9]{2,2}:[0-9]{2,2}\.[0-9]+)"
-	RGX_INFO="${RGX_TIME} == Info: (.*)"
-	RGX_XMIT="${RGX_TIME} ([<=][=>]) (Send|Recv) (header|data), ([0-9]+).*"
+	RGX_INFO="${RGX_TIME} (<=|==|=>) (.*[^[:blank:]].*)"
+	RGX_XMIT="${RGX_TIME} (<=|=>) ((Send|Recv) (header|data|SSL data)), ([0-9]+).*"
 
 	#
 	CMD_RAW=(
@@ -161,31 +162,21 @@ function curl_env ()
 			while read -r ENT
 			do
 				[ -n "${ENT}" ] || continue
-				if [[ "${ENT}" =~ ${RGX_XMIT} ]]
+				if [[ "${ENT}" =~ ${RGX_INFO} ]]
 				then
-					case "${BASH_REMATCH[3]}_${BASH_REMATCH[4]}" in
-					( "Send_header" )	STG=curl_env_hin;;
-					( "Send_data" )		STG=curl_env_inp;;
-					( "Recv_header" )	STG=curl_env_hdr;;
-					( "Recv_data" )		STG=curl_env_out;;
-					esac
-					CNT="${BASH_REMATCH[5]}"
-					continue
-				elif [[ "${ENT}" =~ ${RGX_INFO} ]]
-				then
-					STG=DBG
+					STG=DBG; CNT=.
 				elif [[ "${ENT}" =~ ^CURL_ENV_STT:(.*) ]]
 				then
-					STG=STT
+					STG=STT; CNT=.
 				elif [[ "${ENT}" =~ ^CURL_ENV_EXT:(.*) ]]
 				then
-					STG=EXT
+					STG=EXT; CNT=.
 				fi
 				[ "${DBG:-0}" -lt 8 ] || \
-				printf "%s\t%s\t%q\n" "${STG}" "${CNT}" "${ENT}" 1>&2
+				printf "%-15s  %6s  %q\n" "${STG}" "${CNT}" "${ENT}" 1>&2
 				case "${STG}" in
 				( DBG ) {
-					echo "curl_env_dbg[0]=\"\${curl_env_dbg[0]}\${curl_env_dbg[0]:+\${NLN}}${BASH_REMATCH[2]}\""
+					echo "curl_env_dbg[0]=\"\${curl_env_dbg[0]}\${curl_env_dbg[0]:+\${NLN}}${ENT}\""
 				};;
 				( EXT ) {
 					echo "curl_env_ext[0]=\"\${curl_env_ext[0]}\${curl_env_ext[0]:+\${NLN}}${BASH_REMATCH[1]}\""
@@ -193,21 +184,45 @@ function curl_env ()
 				( STT ) {
 					echo "curl_env_stt[0]=\"\${curl_env_stt[0]}\${curl_env_stt[0]:+\${NLN}}${BASH_REMATCH[1]}\""
 				};;
-				( * ) {
-					[[ "${ENT}" =~ ^[0-9]{4,4}:([ 0-9a-f]{48,48}) ]]
+				( curl_env_* ) {
+					[[ "${ENT}" =~ ^[0-9a-f]{4,4}:([ 0-9a-f]{48,48}) ]]
 					[[ "${BASH_REMATCH[1]}" =~ ([ 0-9a-f]*[0-9a-f]) ]]
 					TMP="${BASH_REMATCH[1]}"
 					TMP="${STG}[0]=\"\${${STG}[0]}\"\$'${TMP// /\\x}'"
-					#echo "${TMP}" 1>&2
 					echo "${TMP}"
 				};;
 				esac
+				if [[ "${ENT}" =~ ${RGX_XMIT} ]]
+				then
+					case "${BASH_REMATCH[3]}" in
+					( "Recv header" )	STG=curl_env_hdr;;
+					( "Send header" )	STG=curl_env_hin;;
+					( "Recv data" )		STG=curl_env_out;;
+					( "Send data" )		STG=curl_env_inp;;
+					( "Recv SSL data" )	STG=curl_env_ssl;;
+					( "Send SSL data" )	STG=curl_env_ssl;;
+					esac
+					CNT="${BASH_REMATCH[6]}"
+				fi
 			done
 		}
 		IFS="${IFS_BAK:-$' \t\n'}"
 	)"
 
 	eval "${TMP}"
+
+	curl_env_ssl[0]=
+
+	[[ ! "${curl_env_hdr[0]}" =~ (Transfer-Encoding: chunked) ]] || {
+		TMP=
+		while [[ "${curl_env_out[0]}" =~ ^(.*${CRT}${NLN})([0-9a-fA-F]{1,}${CRT}${NLN})(.*)(${CRT}${NLN})$ ]]
+		do
+			TMP="${BASH_REMATCH[3]}${TMP}"
+			curl_env_out[0]="${BASH_REMATCH[1]}"
+		done
+		[[ "${curl_env_out[0]}" =~ ^([0-9a-fA-F]{1,}${CRT}${NLN})(.*)(${CRT}${NLN})$ ]]
+		curl_env_out[0]="${BASH_REMATCH[2]}${TMP}"
+	}
 
 	curl_env_hdr[0]="${curl_env_hdr[0]//${CRT}${NLN}/${NLN}}"
 	curl_env_hin[0]="${curl_env_hin[0]//${CRT}${NLN}/${NLN}}"
