@@ -20,11 +20,17 @@ function curl_env ()
 	__bash_function_init_locv_arrays=(
 		WVARS
 		CMD{,_{RAW,DBG}}
-		curl_env_tmp_{dbg,ext,hin,hdr,out,err,stt,ssl}
 	)
 	__bash_function_init_glbv_strings=()
 	__bash_function_init_glbv_arrays=(
-		curl_env_{dbg,ext,hin,hdr,out,err,stt,ssl}
+		curl_env_dbg
+		curl_env_ext
+		curl_env_hin
+		curl_env_hdr
+		curl_env_out
+		curl_env_err
+		curl_env_stt
+		curl_env_ssl
 	)
 	: BASH_FUNCTION_INIT SOURCE; eval "$( bash_function_init || echo return 1 )"
 
@@ -170,50 +176,42 @@ function curl_env ()
 				printf "%-15s  %6s  %q\n" "${STG}" "${CNT}" "${ENT}" 1>&2
 				case "${STG}" in
 				( DBG ) {
-					eval "curl_env_tmp_dbg[0]=\"\${curl_env_tmp_dbg[0]}\${curl_env_tmp_dbg[0]:+\${NLN}}${ENT}\""
+					echo "curl_env_dbg[0]=\"\${curl_env_dbg[0]}\${curl_env_dbg[0]:+\${NLN}}${ENT}\""
 				};;
 				( EXT ) {
-					eval "curl_env_tmp_ext[0]=\"\${curl_env_tmp_ext[0]}\${curl_env_tmp_ext[0]:+\${NLN}}${BASH_REMATCH[1]}\""
+					echo "curl_env_ext[0]=\"\${curl_env_ext[0]}\${curl_env_ext[0]:+\${NLN}}${BASH_REMATCH[1]}\""
 				};;
 				( STT ) {
-					eval "curl_env_tmp_stt[0]=\"\${curl_env_tmp_stt[0]}\${curl_env_tmp_stt[0]:+\${NLN}}${BASH_REMATCH[1]}\""
+					echo "curl_env_stt[0]=\"\${curl_env_stt[0]}\${curl_env_stt[0]:+\${NLN}}${BASH_REMATCH[1]}\""
 				};;
-				( curl_env_tmp_* ) {
+				( curl_env_* ) {
 					[[ "${ENT}" =~ ^[0-9a-f]{4,4}:([ 0-9a-f]{48,48}) ]]
 					[[ "${BASH_REMATCH[1]}" =~ ([ 0-9a-f]*[0-9a-f]) ]]
 					TMP="${BASH_REMATCH[1]}"
 					TMP="${STG}[0]=\"\${${STG}[0]}\"\$'${TMP// /\\x}'"
-					eval "${TMP}"
+					echo "${TMP}"
 				};;
 				esac
 				if [[ "${ENT}" =~ ${RGX_XMIT} ]]
 				then
 					case "${BASH_REMATCH[3]}" in
-					( "Recv header" )	STG=curl_env_tmp_hdr;;
-					( "Send header" )	STG=curl_env_tmp_hin;;
-					( "Recv data" )		STG=curl_env_tmp_out;;
-					( "Send data" )		STG=curl_env_tmp_inp;;
-					( "Recv SSL data" )	STG=curl_env_tmp_ssl;;
-					( "Send SSL data" )	STG=curl_env_tmp_ssl;;
+					( "Recv header" )	STG=curl_env_hdr;;
+					( "Send header" )	STG=curl_env_hin;;
+					( "Recv data" )		STG=curl_env_out;;
+					( "Send data" )		STG=curl_env_inp;;
+					( "Recv SSL data" )	STG=curl_env_ssl;;
+					( "Send SSL data" )	STG=curl_env_ssl;;
 					esac
 					CNT="${BASH_REMATCH[6]}"
 				fi
 			done
-			unset curl_env_tmp_ssl
-			declare -p ${!curl_env_tmp_*}
 		}
 		IFS="${IFS_BAK:-$' \t\n'}"
 	)"
 
 	eval "${TMP}"
 
-	curl_env_tmp_ssl[0]=
-
-	for ENT in {dbg,ext,hin,hdr,out,err,stt,ssl}
-	do
-		eval "curl_env_${ENT}=( \"\${curl_env_tmp_${ENT}[@]}\" )"
-	done
-	unset ${!curl_env_tmp_*}
+	curl_env_ssl[0]=
 
 	[[ ! "${curl_env_hdr[0]}" =~ (Transfer-Encoding: chunked) ]] || {
 		TMP=
