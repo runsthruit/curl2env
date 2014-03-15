@@ -15,6 +15,7 @@ function curl_env ()
 	)
 	__bash_function_init_locv_strings=(
 		CHR_{ESC,DBQ,SGQ}
+		RGX_{TIME,INFO,XMIT}
 	)
 	__bash_function_init_locv_arrays=(
 		WVARS
@@ -22,7 +23,13 @@ function curl_env ()
 	)
 	__bash_function_init_glbv_strings=()
 	__bash_function_init_glbv_arrays=(
-		curl_env_{dbg,ext,hin,hdr,out,err,stt}
+		curl_env_dbg
+		curl_env_ext
+		curl_env_hin
+		curl_env_hdr
+		curl_env_out
+		curl_env_err
+		curl_env_stt
 	)
 	: BASH_FUNCTION_INIT SOURCE; eval "$( bash_function_init || echo return 1 )"
 
@@ -74,9 +81,6 @@ function curl_env ()
 	[ "${OPT_curl_manual}" -eq 0 ] || { curl --manual; return 0; }
 
 	#
-	CHR_ESC="\\"
-	CHR_DBQ="\""
-	CHR_SGQ="'"
 	WVARS=(
 		http_code
 		url_effective redirect_url
@@ -90,11 +94,15 @@ function curl_env ()
 		num_connects num_redirects
 		ftp_entry_path ssl_verify_result
 	)
+	CHR_ESC="\\"
+	CHR_DBQ="\""
+	CHR_SGQ="'"
+	RGX_TIME="^([0-9]{2,2}:[0-9]{2,2}:[0-9]{2,2}\.[0-9]+)"
+	RGX_INFO="${RGX_TIME} == Info: (.*)"
+	RGX_XMIT="${RGX_TIME} ([<=][=>]) (Send|Recv) (header|data), ([0-9]+).*"
 
 	#
 	CMD_RAW=(
-		curl
-		-vs
 		${ARGS[@]:+"${ARGS[@]}"}
 	)
 
@@ -130,90 +138,97 @@ function curl_env ()
 
 	[ "${DBG:-0}" -lt 9 ] || echo 1>&2
 	[ "${DBG:-0}" -lt 1 ] || \
-	echo "+ ${CMD_DBG[*]}" 1>&2
+	echo "+ curl ${CMD_DBG[*]}" 1>&2
 	[ "${DBG:-0}" -lt 8 ] || echo 1>&2
 
 	TMP="$(
-		IFS="${NLN}"
+		IFS="${CRT}${NLN}"
+		{ [ -t 0 ] && cat /dev/null || cat -; } |
 		{
-			{ [ -t 0 ] && cat /dev/null || cat -; } |
-			tee >( { [ "${DBG:-0}" -lt 8 ] && cat - >/dev/null || { sed "s/^/0 /" | cat -vet; } 1>&2; } ) |
-			{
-				eval "${CMD[@]}" \
-					-w "\"$( printf "2 = %s=%%{%s}\\\n" $( for I in "${WVARS[@]}"; do echo "${I}"; echo "${I}"; done ) )\"" \
-					-o >( sed "s=^=1 . =" ) \
-					2> >( sed "s=^=2 =" 1>&2 )
-			} 2>&1
-			echo "3 ${?}" 1>&2
-		} 2>&1 |
-		tee >( { [ "${DBG:-0}" -lt 8 ] && cat - >/dev/null || cat -vet - 1>&2; } ) |
+			eval curl \
+				-w "\"$(
+					printf \
+						"CURL_ENV_STT:%s=%%{%s}\\\n" \
+						$( for I in "${WVARS[@]}"; do echo "${I}"; echo "${I}"; done )
+				)\"" \
+				-o /dev/null \
+				--trace-time \
+				--trace - \
+				"${CMD[@]}"
+			echo "CURL_ENV_EXT:${?}"
+		} |
 		{
 			while read -r ENT
 			do
-				[[ "${ENT}" =~ ^([123])(.?)(.?)(.?)(.*)$ ]] || :
-				case "${BASH_REMATCH[1]:-}" in
-				( 3 ) curl_env_ext[${#curl_env_ext[@]}]="${ENT:2:1}";;
-				( 1 ) {
-					case "${BASH_REMATCH[3]:-}" in
-					( "." ) curl_env_out[${#curl_env_out[@]}]="${ENT:4}";;
+				[ -n "${ENT}" ] || continue
+				if [[ "${ENT}" =~ ${RGX_XMIT} ]]
+				then
+					case "${BASH_REMATCH[3]}_${BASH_REMATCH[4]}" in
+					( "Send_header" )	STG=curl_env_hin;;
+					( "Send_data" )		STG=curl_env_inp;;
+					( "Recv_header" )	STG=curl_env_hdr;;
+					( "Recv_data" )		STG=curl_env_out;;
 					esac
+					CNT="${BASH_REMATCH[5]}"
+					continue
+				elif [[ "${ENT}" =~ ${RGX_INFO} ]]
+				then
+					STG=DBG
+				elif [[ "${ENT}" =~ ^CURL_ENV_STT:(.*) ]]
+				then
+					STG=STT
+				elif [[ "${ENT}" =~ ^CURL_ENV_EXT:(.*) ]]
+				then
+					STG=EXT
+				fi
+				[ "${DBG:-0}" -lt 8 ] || \
+				printf "%s\t%s\t%q\n" "${STG}" "${CNT}" "${ENT}" 1>&2
+				case "${STG}" in
+				( DBG ) {
+					echo "curl_env_dbg[0]=\"\${curl_env_dbg[0]}\${curl_env_dbg[0]:+\${NLN}}${BASH_REMATCH[2]}\""
 				};;
-				( 2 ) {
-					ENT="${ENT%${CRT}}"
-					case "${BASH_REMATCH[3]:-}" in
-					( "*" | " " | "${TAB}" ) {
-						[ "${ENT:4}" == "" ] \
-						|| curl_env_dbg[${#curl_env_dbg[@]}]="${ENT:4}"
-					};;
-					( "=" ) {
-						[ "${ENT:4}" == "" ] \
-						|| curl_env_stt[${#curl_env_stt[@]}]="${ENT:4}"
-					};;
-					( "<" ) {
-						[ "${ENT:4}" == "" ] \
-						|| curl_env_hdr[${#curl_env_hdr[@]}]="${ENT:4}"
-					};;
-					( ">" ) {
-						[ "${ENT:4}" == "" ] \
-						|| curl_env_hin[${#curl_env_hin[@]}]="${ENT:4}"
-					};;
-					( "{" | "}" ) :;;
-					( * ) {
-						curl_env_err[${#curl_env_err[@]}]="${ENT:2}"
-						echo "? ${ENT:2}" 1>&2
-					};;
-					esac
+				( EXT ) {
+					echo "curl_env_ext[0]=\"\${curl_env_ext[0]}\${curl_env_ext[0]:+\${NLN}}${BASH_REMATCH[1]}\""
+				};;
+				( STT ) {
+					echo "curl_env_stt[0]=\"\${curl_env_stt[0]}\${curl_env_stt[0]:+\${NLN}}${BASH_REMATCH[1]}\""
+				};;
+				( * ) {
+					[[ "${ENT}" =~ ^[0-9]{4,4}:([ 0-9a-f]{48,48}) ]]
+					[[ "${BASH_REMATCH[1]}" =~ ([ 0-9a-f]*[0-9a-f]) ]]
+					TMP="${BASH_REMATCH[1]}"
+					TMP="${STG}[0]=\"\${${STG}[0]}\"\$'${TMP// /\\x}'"
+					#echo "${TMP}" 1>&2
+					echo "${TMP}"
 				};;
 				esac
 			done
-			for VAR in curl_env_{dbg,ext,hin,hdr,out,err,stt}
-			do
-				VAL="$( declare -p ${VAR} )"
-				VAL="${VAL#*\'}"
-				VAL="${VAL%\'*}"
-				VAL="${VAL//\'\\\'\'/${CHR_SGQ}}"
-				echo "${VAR}=${VAL}"
-			done
 		}
+		IFS="${IFS_BAK:-$' \t\n'}"
 	)"
 
 	eval "${TMP}"
 
+	curl_env_hdr[0]="${curl_env_hdr[0]//${CRT}${NLN}/${NLN}}"
+	curl_env_hin[0]="${curl_env_hin[0]//${CRT}${NLN}/${NLN}}"
+	[[ "${curl_env_hdr[0]}" =~ (.*[^${NLN}])[${NLN}]+$ ]] && curl_env_hdr[0]="${BASH_REMATCH[1]}"
+	[[ "${curl_env_hin[0]}" =~ (.*[^${NLN}])[${NLN}]+$ ]] && curl_env_hin[0]="${BASH_REMATCH[1]}"
+
 	[ "${DBG:-0}" -gt 7 ] || {
-	[ "${DBG:-0}" -lt 4 ] || { echo; printf "* %s\n" "${curl_env_dbg[@]}"; } 1>&2
-	[ "${DBG:-0}" -lt 5 ] || { printf "! %s\n" "${curl_env_ext[@]}"; } 1>&2
-	[ "${DBG:-0}" -lt 6 ] || { echo; printf "= %s\n" "${curl_env_stt[@]}"; } 1>&2
-	[ "${DBG:-0}" -lt 3 ] \
-	&& { echo "${curl_env_hdr[0]:-ERR_NO_HEADERS}"; } 1>&2 \
-	|| {
-		echo; printf "> %s\n" "${curl_env_hin[@]}"
-		echo; printf "< %s\n" "${curl_env_hdr[@]}"
-	} 1>&2
-	[ "${DBG:-0}" -lt 5 -o "${#curl_env_err[*]}" -eq 0 ] \
-	|| { echo; printf "? %s\n" "${curl_env_err[@]}"; } 1>&2
+		[ "${DBG:-0}" -lt 4 ] || { echo; printf "* %s\n" "${curl_env_dbg[0]//${NLN}/${NLN}* }"; } 1>&2
+		[ "${DBG:-0}" -lt 5 ] || { printf "! %s\n" "${curl_env_ext[0]//${NLN}/${NLN}! }"; } 1>&2
+		[ "${DBG:-0}" -lt 6 ] || { echo; printf "= %s\n" "${curl_env_stt[0]//${NLN}/${NLN}= }"; } 1>&2
+		[ "${DBG:-0}" -lt 3 ] \
+		&& { TMP="${curl_env_hdr[0]%%${NLN}*}"; printf "%s\n" "${TMP:-ERR_NO_HEADERS}"; } 1>&2 \
+		|| {
+			echo; printf "> %s\n" "${curl_env_hin[0]//${NLN}/${NLN}> }"
+			echo; printf "< %s\n" "${curl_env_hdr[0]//${NLN}/${NLN}< }"
+		} 1>&2
+		[ "${DBG:-0}" -lt 5 -o "${#curl_env_err[0]}" -eq 0 ] \
+		|| { echo; printf "? %s\n" "${curl_env_err[0]//${NLN}/${NLN}? }"; } 1>&2
 	}
 	[ "${DBG:-0}" -lt 3 ] || { echo; } 1>&2
-	[ "${DBG:-0}" -lt 2 -a -t 1 -a "${OPT_out}" -eq 0 ] || printf "%s\n" "${curl_env_out[@]}"
+	[ "${DBG:-0}" -lt 2 -a -t 1 -a "${OPT_out}" -eq 0 ] || printf "%s" "${curl_env_out[0]}"
 
 	return ${curl_env_ext[0]:-100}
 
