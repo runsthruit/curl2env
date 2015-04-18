@@ -3,7 +3,7 @@
 function curl_env ()
 {
 
-    #=# BASH_FUNCTION_INIT #=# INIT #=# DO NOT TOUCH #=#
+    # BASH_FUNCTION_INIT # INIT # DO NOT TOUCH # {{{
 
     # Pickup the last command exit code.
     # Don't put *ANYTHING* before this in your function.
@@ -11,7 +11,9 @@ function curl_env ()
     # Will add it to vars_il_ and vars____ later on, so it doesn't get erased.
     declare -ir pre_return=${?}
 
-    #=# BASH_FUNCTION_INIT #=# SETUP #=# YOUR CODE HERE #=#
+    # BASH_FUNCTION_INIT # INIT # DO NOT TOUCH # }}}
+
+    # BASH_FUNCTION_INIT # SETUP # YOUR CODE HERE # START
 
     # Additions to opts_valid go here.
     opts_valid=(
@@ -47,9 +49,9 @@ function curl_env ()
         curl_env_hin
         curl_env_hdr
         curl_env_out
-        curl_env_err
         curl_env_stt
         curl_env_ssl
+        curl_env_unk
     )
     vars_agx=()
     # Additions to integer variables go here.
@@ -57,7 +59,9 @@ function curl_env ()
     vars_il_=()
     vars_ilx=()
 
-    #=# BASH_FUNCTION_INIT #=# SETUP #=# DO NOT TOUCH #=#
+    # BASH_FUNCTION_INIT # SETUP # YOUR CODE HERE # FINISH
+
+    # BASH_FUNCTION_INIT # SETUP # DO NOT TOUCH # {{{
 
     # Special variable for setting valid options names.
     # This variable will be added to vars_al_ and vars____ later on.
@@ -116,6 +120,9 @@ function curl_env ()
     declare vars_il_=(
         fnc_return  # Return value for this function.
         I J K       # Common iterators.
+        flg_file0   # STDIN  is open?
+        flg_file1   # STDOUT is open?
+        flg_file2   # STDERR is open?
         ${vars_il_[*]}
     )
     declare vars_ilx=( ${vars_ilx[*]} )
@@ -183,7 +190,10 @@ function curl_env ()
         tmp="${tmp//${tmps[${I}]}/${tmps[$((I+26))]}}"
     done
     # Set 'dbg' to environment debug level value.
-    printf -v tmp 'dbg="${%s:-${%s:-${DEBUG:-0}}}"' "${tmp}" "${tmp#DEBUG_}_DEBUG"
+    # Triple-'}' messes with vim folding, so crappy fix is to break this apart.
+    printf -v tmp 'dbg="${%s:-${%s:-}}"' "${tmp}" "${tmp#DEBUG_}_DEBUG"
+    eval "${tmp}"
+    printf -v tmp 'dbg="${dbg:-${DEBUG:-0}}"'
     eval "${tmp}"
     # Clear used variables.
     tmps=()
@@ -286,9 +296,17 @@ function curl_env ()
 
     # Set 'dbg' equal to 'opt_debug'
     dbg="${opt_debug:-0}"
-    
-    #=# BASH_FUNCTION_INIT #=# FUNCTION #=# YOUR CODE HERE #=#
 
+    # Flag standard file descriptors as open (or not).
+    [[ ! -t 0 ]] || flg_file0=1
+    [[ ! -t 1 ]] || flg_file1=1
+    [[ ! -t 2 ]] || flg_file2=1
+
+    # }}}
+
+    # BASH_FUNCTION_INIT # FUNCTION # YOUR CODE HERE # START
+
+    # Display help if 'help' or 'manual' options are provided.
     if [[ "${opt_help:-0}" -ne 0 || "${opt_manual:-0}" -ne 0 ]]
     then
             printf -- %s '
@@ -307,11 +325,11 @@ function curl_env ()
     OPTIONS::
 
         To produce debug output..
-        
+
         --debug
-        
+
         Or set explicitely to a certain level..
-        
+
         --debug=[0-9]
 
         Or, use the debug environment variable..
@@ -320,16 +338,18 @@ function curl_env ()
         export DEBUG=[0-9]
 
         To view the curl help or manual, provide these options..
-    
+
         --curl_help
 
         --curl_manual
             '
             return 1
     fi
+    # Display 'curl' help or manual.
     [[ "${opt_curl_help:-0}" -eq 0 ]] || { curl --help; return; }
     [[ "${opt_curl_manual:-0}" -eq 0 ]] || { curl --manual; return; }
 
+    # Variables to use with write-out option in curl.
     write_out_vars=(
             http_code
             url_effective redirect_url
@@ -343,6 +363,7 @@ function curl_env ()
             num_connects num_redirects
             ftp_entry_path ssl_verify_result
     )
+    # Regex variables for use in parsing curl trace output.
     rgx_time='^([0-9]{2,2}:[0-9]{2,2}:[0-9]{2,2}\.[0-9]+)'
     rgx_info="${rgx_time}"' == Info: (.*[^[:blank:]].*)'
     rgx_xmit="${rgx_time}"' (<=|=>) ((Send|Recv) (header|data|SSL data)), ([0-9]+).*'
@@ -350,20 +371,29 @@ function curl_env ()
     rgx_exit='^CURL_ENV_EXT:(.*)'
     rgx_data='^[0-9a-f]{4,4}:(( [0-9a-f][0-9a-f]){1,16})'
 
-    #echo + curl "${eargs[@]}" 1>&2
+    # Debug output of curl command requested.
+    [[ "${dbg}" -lt 2 ]] || {
+        printf '+ curl'
+        printf ' %s' "${eargs[@]}"
+        printf '\n'
+    } 1>&2
 
+    # Construct first portion of curl command.
+    # Include provided arguments first, allowing for override.
+    # Write-out argument is set here to make it easy to parse later.
     curl_cmd=(
         curl
         "${eargs[@]}"
         -w "'$( for tmp in ${write_out_vars[*]}; do printf 'CURL_ENV_STT:%s=%%{%s}\\n' "${tmp}" "${tmp}"; done )'"
     )
-
+    # A quick lazy way of adding enough '-o /dev/null' arguments to redirect output for all requested URIs.
     for tmp in "${eargs[@]}"
     do
         [[ "${tmp}" != -* ]] || continue
         curl_cmd=( "${curl_cmd[@]}" -o /dev/null )
     done
-
+    # Finish out curl command with an extra '-o /dev/null' (just in case).
+    # Also add options to turn on tracing and disable buffering of output.
     curl_cmd=(
         "${curl_cmd[@]}"
         -o /dev/null
@@ -372,13 +402,20 @@ function curl_env ()
         --no-buffer
     )
 
-    #echo + "${curl_cmd[@]}"
+    # Debug output of curl command to be evaluated. 
+    [[ "${dbg}" -lt 8 ]] || {
+        printf '+'
+        printf ' %s' "${curl_cmd[@]}"
+        printf '\n'
+    } 1>&2
+
+    # Eval curl command and break output into a temporary array, delimited by newline char.
     IFS="${IFS_N}"
     tmps=( $( eval "${curl_cmd[@]}"; printf 'CURL_ENV_EXT:%s' "${?}" ) )
     IFS="${IFS_DEF}"
 
     # Clear global curl_env variables.
-    for tmp in curl_env_{dbg,ext,hin,hdr,out,err,stt,ssl}
+    for tmp in curl_env_{dbg,ext,hin,hdr,out,stt,ssl,unk}
     do
         printf -v tmp '%s=()' "${tmp}"
         eval "${tmp}"
@@ -388,21 +425,32 @@ function curl_env ()
     I=-1
     for tmp in "${tmps[@]}"
     do
-        :
+        #
+        # If this is an Info line..
         if [[ "${tmp}" =~ ${rgx_info} ]]
         then
-            :
+            #
+            # If this is the beginning of a new connection..
             if [[ "${BASH_REMATCH[2]}" = 'Adding handle: conn:'* ]]
             then
                 stg='conn'
+                # Increment array index for this connection.
                 let I++
             fi
+            [[ "${dbg}" -lt 8 ]] || {
+                printf '\n# itr [ %s ]\tstg ( %s )\n' "${I}" "${stg}"
+                declare -p BASH_REMATCH
+            } 1>&2
+            # Add info line to debug variable.
+            # Only add newline if variable already set.
             curl_env_dbg[${I}]="${curl_env_dbg[${I}]:+${curl_env_dbg[${I}]}${tc_nln}}${tmp}"
+            # Next line.
             continue
-            :
+            #
         elif [[ "${tmp}" =~ ${rgx_xmit} ]]
         then
-            :
+            #
+            # Set parsing stage based on what kind of transmission this is.
             case "${BASH_REMATCH[3]}" in
                 ( 'Send header' )   stg='hin';;
                 ( 'Recv header' )   stg='hdr';;
@@ -412,60 +460,129 @@ function curl_env ()
                 ( 'Send SSL data' ) stg='ssl';;
                 ( * )               stg='unk';;
             esac
+            [[ "${dbg}" -lt 8 ]] || {
+                printf '\n# itr [ %s ]\tstg ( %s )\n' "${I}" "${stg}"
+                declare -p BASH_REMATCH
+            } 1>&2
+            # Add transmit line to debug variable.
             curl_env_dbg[${I}]="${curl_env_dbg[${I}]:+${curl_env_dbg[${I}]}${tc_nln}}${tmp}"
             continue
-            :
+            #
         elif [[ "${tmp}" =~ ${rgx_stat} ]]
         then
-            :
+            #
+            # This is a status line, parsed from the write-out output.
             stg='stt'
+            [[ "${dbg}" -lt 8 ]] || {
+                printf '\n# itr [ %s ]\tstg ( %s )\n' "${I}" "${stg}"
+                declare -p BASH_REMATCH
+            } 1>&2
             curl_env_stt[${I}]="${curl_env_stt[${I}]:+${curl_env_stt[${I}]}${tc_nln}}${BASH_REMATCH[1]}"
             continue
-            :
+            #
         elif [[ "${tmp}" =~ ${rgx_exit} ]]
         then
-            :
+            #
+            # This is the exit code line, generated during evaluation of curl command.
             stg='ext'
+            [[ "${dbg}" -lt 8 ]] || {
+                printf '\n# itr [ %s ]\tstg ( %s )\n' "${I}" "${stg}"
+                declare -p BASH_REMATCH
+            } 1>&2
             curl_env_ext[0]="${BASH_REMATCH[1]}"
             continue
-            :
+            #
         elif [[ "${tmp}" =~ ${rgx_data} ]]
         then
-            :
+            #
+            [[ "${dbg}" -lt 8 ]] || {
+                printf '\n# itr [ %s ]\tstg ( %s )\n' "${I}" "${stg}"
+                declare -p BASH_REMATCH
+            } 1>&2
+            #
+            # This is a data/header line.
+            # Regex groups only the raw hex codes.
             tmp="${BASH_REMATCH[1]}"
+            # Ready the hex codes for conversion to text for storage.
             tmp="${tmp// /\\x}"
+            [[ "${dbg}" -lt 8 ]] || {
+                declare -p tmp
+            } 1>&2
             printf -v tmp "${tmp}"
+            # Store data in appropriate header/data variable.
+            [[ "${dbg}" -lt 8 ]] || {
+                declare -p tmp
+            } 1>&2
             printf -v tmp 'curl_env_%s[${I}]="${curl_env_%s[${I}]}"%q' "${stg}" "${stg}" "${tmp}"
             eval "${tmp}"
             continue
-            :
+            #
         else
-            :
-            stg='err'
-            curl_env_err[${I}]="${curl_env_err[${I}]:+${curl_env_err[${I}]}${tc_nln}}${tmp}"
+            #
+            # Catch unidentified lines.
+            stg='unk'
+            [[ "${dbg}" -lt 8 ]] || {
+                printf '\n# itr [ %s ]\tstg ( %s )\n' "${I}" "${stg}"
+                declare -p tmp
+            } 1>&2
+            curl_env_unk[${I}]="${curl_env_unk[${I}]:+${curl_env_unk[${I}]}${tc_nln}}${tmp}"
             continue
-            :
+            #
         fi
-        :
+        #
     done
 
+    # Convert '\r\n' to '\n' in header variables; Also remove all '\n' from the very end.
     for (( I=0; I<${#curl_env_hin[@]}; I++ ))
     do
         curl_env_hin[${I}]="${curl_env_hin[${I}]//${tc_crt}${tc_nln}/${tc_nln}}"
-        curl_env_hin[${I}]="${curl_env_hin[${I}]%${tc_nln}}"
+        curl_env_hin[${I}]="${curl_env_hin[${I}]%${tc_nln}${tc_nln}}"
     done
-
     for (( I=0; I<${#curl_env_hdr[@]}; I++ ))
     do
         curl_env_hdr[${I}]="${curl_env_hdr[${I}]//${tc_crt}${tc_nln}/${tc_nln}}"
-        curl_env_hdr[${I}]="${curl_env_hdr[${I}]%${tc_nln}}"
+        curl_env_hdr[${I}]="${curl_env_hdr[${I}]%${tc_nln}${tc_nln}}"
     done
 
+    # Assign curl exit code to function exit code.
     fnc_return="${curl_env_ext[0]:-100}"
 
-    #=# BASH_FUNCTION_INIT #=# EXIT #=# DO NOT TOUCH #=#
+    # Debugging output.
+    [[ "${dbg}" -gt 7 ]] || {
+        for (( I=0; I<${#curl_env_hin[@]}; I++ ))
+        do
+            {
+                [[ "${dbg}" -lt 3 ]] || printf '\n'
+                [[ "${dbg}" -lt 4 ]] || printf '* %s\n' "${curl_env_dbg[${I}]//${tc_nln}/${tc_nln}* }"
+                [[ "${dbg}" -lt 5 ]] || printf '= %s\n' "${curl_env_stt[${I}]//${tc_nln}/${tc_nln}= }"
+                if [[ "${dbg}" -lt 3 ]]
+                then
+                    [[ "${dbg}" -eq 0 && "${flg_file1}" -eq 0 ]] || {
+                        tmp="${curl_env_hdr[${I}]%%${tc_nln}*}"
+                        printf '%s\n' "${tmp:-ERR_NO_HEADERS}"
+                    }
+                else
+                    printf '> %s\n' "${curl_env_hin[${I}]//${tc_nln}/${tc_nln}> }"
+                    printf '< %s\n' "${curl_env_hdr[${I}]//${tc_nln}/${tc_nln}< }"
+                fi
+                [[ "${dbg}" -lt 5 || "${#curl_env_unk[${I}]}" -eq 0 ]] || {
+                    printf '? %s\n' "${curl_env_unk[${I}]//${tc_nln}/${tc_nln}? }"
+                }
+            } 1>&2
+            [[ "${dbg}" -lt 2 && -t 1 && "${opt_out:-0}" -eq 0 ]] || {
+                printf '%s\n' "${curl_env_out[${I}]%${tc_nln}}"
+            }
+        done
+        [[ "${dbg}" -lt 6 ]] || printf '\n! %s\n' "${curl_env_ext[0]//${tc_nln}/${tc_nln}! }" 1>&2
+    }
+
+    # BASH_FUNCTION_INIT # FUNCTION # YOUR CODE HERE # FINISH
+
+    # BASH_FUNCTION_INIT # EXIT # DO NOT TOUCH # {{{
 
     # Return the value of 'fnc_return' variable.
     return "${fnc_return}"
+
+    # }}}
 
 }
