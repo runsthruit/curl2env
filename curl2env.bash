@@ -235,6 +235,8 @@ function curl2env ()
                 printf -v tmp -- 'opt_%s=%q' "${tmp%%=*}" "${tmp#*=}"
                 eval "${tmp}"
             else
+                # Add to arguments array, can be excluded in comp to opts_invalid.
+                args[${#args[@]}]="${tmp}"
                 # If not valid option name, add to invalid list.
                 tmp="${tmp%%=*}"
                 opts_invalid[${#opts_invalid[@]}]="${tmp}"
