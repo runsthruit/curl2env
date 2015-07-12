@@ -9,17 +9,32 @@ function curl2env ()
     opts_valid=(
         curl_help
         curl_manual
+        out
     )
 
     # Additions to string variables go here.
     # Local, Local-export, Global, Global-export
     vars_sl_=(
-        rgx_time
-        rgx_info
-        rgx_xmit
-        rgx_stat
-        rgx_exit
+        tc_crlf
         stg
+        wrt_arg
+        trc_arg
+        curl2env_tmp
+        hdr_ct
+        hdr_te
+        rgx_ent
+        rgx_dbg
+        rgx_wrt
+        rgx_ext
+        rgx_ent_time
+        rgx_ent_info
+        rgx_ent_xmit
+        rgx_ent_data
+        rgx_dbg_slice
+        rgx_hdr_ct
+        rgx_hdr_te
+        rgx_wrt_fe_nil
+        rgx_wrt_redirs
     )
     vars_slx=()
     vars_sg_=()
@@ -27,7 +42,7 @@ function curl2env ()
     # Additions to array variables go here.
     # Local and Global
     vars_al_=(
-        write_out_vars
+        wrt_vars
         curl_cmd
     )
     vars_ag_=(
@@ -35,13 +50,23 @@ function curl2env ()
         curl2env_ext
         curl2env_hdr
         curl2env_hin
+        curl2env_inp
         curl2env_out
-        curl2env_stt
+        curl2env_wrt
         curl2env_unk
     )
     # Additions to integer variables go here.
     # Local and Global
-    vars_il_=()
+    vars_il_=(
+        flg_rgx_nomatch
+        flg_out_keep
+        flg_chnk_enc
+        cnt_chnk_size
+        cnt_xmit_done
+        cnt_xmit_size
+        cnt_wrt_redirs
+        err_rgx
+    )
     vars_ig_=()
 
     # BASH_FUNCTION_INIT # INIT # YOUR CODE HERE # FINISH
@@ -183,7 +208,7 @@ function curl2env ()
     # Triple-'}' messes with vim folding, so crappy fix is to break this apart.
     printf -v tmp 'dbg="${%s:-${%s:-}}"' "${tmp}" "${tmp#DEBUG_}_DEBUG"
     eval "${tmp}"
-    printf -v tmp 'dbg="${dbg:-${DEBUG:-0}}"'
+    printf -v tmp 'dbg="${dbg:-${DEBUG:-}}"'
     eval "${tmp}"
     # Clear used variables.
     tmps=()
@@ -287,7 +312,7 @@ function curl2env ()
     I=
 
     # Set 'dbg' equal to 'opt_debug'
-    dbg="${opt_debug:-0}"
+    dbg="${dbg:-${opt_debug:-0}}"
 
     # Flag standard file descriptors as open (or not).
     [[ ! -t 0 ]] || flg_file0=1
@@ -299,21 +324,23 @@ function curl2env ()
     # BASH_FUNCTION_INIT # MAIN # YOUR CODE HERE # START
 
     # Backup STDIN/STDOUT/STDERR
-    exec 6>&0
-    exec 7>&1
-    exec 8>&2
+    {
+        exec 6>&0
+        exec 7>&1
+        exec 8>&2
+    } 1>&2
 
     # Display 'curl' help or manual.
     {
         if [[ "${opt_curl_help:-0}"   -ne 0 ]]; then curl --help;   return; fi
         if [[ "${opt_curl_manual:-0}" -ne 0 ]]; then curl --manual; return; fi
-    } 1>&8
+    } 1>&2
 
-    # Display help if 'help' or 'manual' options are provided.
+    # Display help.
     {
         if [[ "${opt_help:-0}" -ne 0 ]]; then
             printf -- %s '
-    DESCRIPTION::
+    DESCRIPTION
 
     This function sets global shell variables, and therefore should not be run in a subshell.
 
@@ -325,53 +352,113 @@ function curl2env ()
 
         { curl2env -s icanhazip.com | __YOUR_PARSER__; }
 
-        OPTIONS::
+    OPTIONS
 
-        To produce debug output..
+    To produce debug output..
 
-        --debug
+    --debug
 
-        Or set explicitely to a certain level..
+    Or set explicitely to a certain level..
 
-        --debug=[0-9]
+    --debug=[0-9]
 
-        Or, use the debug environment variable..
+    Or, use the debug environment variable..
 
-        export DEBUG_curl2env=[0-9]
-        export DEBUG=[0-9]
+    export DEBUG_curl2env=[0-9]
+    export DEBUG=[0-9]
 
-        To view the curl help or manual, provide these options..
+    To view the curl help or manual, provide these options..
 
-        --curl_help
+    --curl_help
 
-        --curl_manual
+    --curl_manual
             '
-            return 1
+            return "${fnc_return}"
         fi
-    } 1>&8
+    } 1>&2
 
-    # Variables to use with write-out option in curl.
-    write_out_vars=(
-    http_code
-    url_effective redirect_url
-    http_connect
-    time_total
-    time_namelookup time_connect time_appconnect
-    time_pretransfer time_redirect time_starttransfer
-    size_download size_upload size_header size_request
-    speed_download speed_upload
-    content_type
-    num_connects num_redirects
-    ftp_entry_path ssl_verify_result
-    )
-    # Regex variables for use in parsing curl trace output.
-    rgx_time='^([0-9]{2,2}:[0-9]{2,2}:[0-9]{2,2}\.[0-9]+)'
-    rgx_info="${rgx_time}"' == Info: (.*[^[:blank:]].*)'
-    rgx_xmit="${rgx_time}"' (<=|=>) ((Send|Recv) (header|data|SSL data)), ([0-9]+).*'
-    rgx_stat='^CURL2ENV_STT:(.*)'
-    rgx_exit='^CURL2ENV_EXT:(.*)'
-    rgx_data='^[0-9a-f]{4,4}:(( [0-9a-f][0-9a-f]){1,16}).*$'
-    rgx_hdr_chunked='^([^'"${tc_nln}"']*['"${tc_nln}"'])*[Tt]ransfer-[Ee]ncoding:[[:blank:]]*[Cc]hunked'
+    # Initialize variables.
+    {
+        # Clear global curl2env variables.
+        for tmp in ${vars_ag_[*]}; do
+            printf -v tmp '%s=()' "${tmp}"
+            eval "${tmp}"
+        done
+        # Generate write-out argument.
+        wrt_vars=(
+        http_code
+        url_effective redirect_url
+        http_connect
+        time_total
+        time_namelookup time_connect time_appconnect
+        time_pretransfer time_redirect time_starttransfer
+        size_download size_upload size_header size_request
+        speed_download speed_upload
+        content_type
+        num_connects num_redirects
+        ftp_entry_path ssl_verify_result
+
+        filename_effective
+        local_ip
+        local_port
+        remote_ip
+        remote_port
+
+        )
+        wrt_arg=
+        for ent in ${wrt_vars[*]}; do
+            printf -v wrt_arg '%s%s=%%{%s}\\n' "${wrt_arg}" "${ent}" "${ent}"
+        done
+        printf -v wrt_arg %s \
+            '"' \
+            ":${rgx_sess}" \
+            ':CURL2ENV_WRT:' \
+            "${wrt_arg}" \
+            ':CURL2ENV_WRT:' \
+            "${rgx_sess}:" \
+            '"'
+        # Generate trace argument.
+        printf -v trc_arg %s \
+            '>( printf %s "' \
+            ":${rgx_sess}" \
+            ':CURL2ENV_DBG:' \
+            '$( cat - )' \
+            ':CURL2ENV_DBG:' \
+            "${rgx_sess}:" \
+            '" )'
+        # Regex variables for use in parsing curl trace output.
+        for ent in 'dbg:DBG' 'wrt:WRT' 'ext:EXT'; do
+            printf -v "rgx_${ent%:*}" %s \
+                '^(.*):' \
+                "${rgx_sess}" \
+                ":CURL2ENV_${ent#*:}:" \
+                '(.*)' \
+                ":CURL2ENV_${ent#*:}:" \
+                "${rgx_sess}" \
+                ':(.*)$'
+        done
+        rgx_crlf="${tc_crt}${tc_nln}"
+        rgx_ent='^([^'"${tc_nln}"']*)['"${tc_nln}"'](.*)|([^'"${tc_nln}"']+)$'
+        rgx_ent_time='[0-9]{2,2}:[0-9]{2,2}:[0-9]{2,2}\.[0-9]{1,6}'
+        rgx_ent_info='^('"${rgx_ent_time}"') == Info: (.*[^[:blank:]].*)$'
+        rgx_ent_xmit='^('"${rgx_ent_time}"') (<=|=>) ((Send|Recv) (header|data|SSL data)), ([0-9]+).*$'
+        rgx_ent_data='^[0-9a-f]{4,4}:(( [0-9a-f][0-9a-f]){1,16}).*$'
+        rgx_dbg_close="${rgx_ent_time}"' == Info: ((Closing|Closed) connection|Connection)[^'"${tc_nln}"']*'
+        rgx_wrt_fe_nil='^(.*'"${tc_nln}"')*filename_effective=('"${tc_nln}"'.*)*$'
+        rgx_wrt_redirs='^(.*'"${tc_nln}"')*num_redirects=([^'"${tc_nln}"']*)('"${tc_nln}"'.*)*$'
+        printf -v rgx_hdr_ct %s \
+            '^([^'"${tc_nln}"']*['"${tc_nln}"'])*' \
+            '([Cc]ontent-[Tt]ype):[[:blank:]]*' \
+            '([^'"${tc_nln}"']*)' \
+            '(.*)$'
+        printf -v rgx_hdr_te %s \
+            '^([^'"${tc_nln}"']*['"${tc_nln}"'])*' \
+            '([Tt]ransfer-[Ee]ncoding):[[:blank:]]*' \
+            '([^'"${tc_nln}"']*)' \
+            '(.*)$'
+        printf -v tc_crlf   '\r\n'
+        err_dbg=250
+    } 1>&2
 
     # Debug output of curl command requested.
     {
@@ -380,208 +467,351 @@ function curl2env ()
             printf ' %s' "${eargs[@]}"
             printf '\n'
         fi
-    } 1>&8
+    } 1>&2
 
-    # Construct first portion of curl command.
-    # Include provided arguments first, allowing for override.
-    # Write-out argument is set here to make it easy to parse later.
-    curl_cmd=(
-    curl
-    "${eargs[@]}"
-    -w "'$( for tmp in ${write_out_vars[*]}; do printf 'CURL2ENV_STT:%s=%%{%s}\\n' "${tmp}" "${tmp}"; done )'"
-    )
-
-    # A quick lazy way of adding enough '-o /dev/null' arguments to redirect output for all requested URIs.
-    for tmp in "${eargs[@]}"; do
-        [[ "${tmp}" != -* ]] || continue
-        curl_cmd=( "${curl_cmd[@]}" -o /dev/null )
-    done
-
-    # Finish out curl command with an extra '-o /dev/null' (just in case).
-    # Also add options to turn on tracing and disable buffering of output.
-    curl_cmd=(
-    "${curl_cmd[@]}"
-    -o /dev/null
-    --trace-time
-    --trace -
-    --no-buffer
-    )
+    # Construct curl command.
+    {
+        # Construct first portion of curl command.
+        # Include provided arguments first, allowing for override.
+        # Also add options to turn on tracing and disable buffering of output.
+        curl_cmd=(
+        curl
+        "${eargs[@]}"
+        --write-out  "${wrt_arg}"
+        --trace-time
+        --trace      "${trc_arg}"
+        )
+    } 1>&2
 
     # Debug output of curl command to be evaluated.
     {
-        if [[ "${dbg}" -gt 6 ]]; then
+        if [[ "${dbg}" -ge 7 ]]; then
             printf '+'
             printf ' %s' "${curl_cmd[@]}"
             printf '\n'
         fi
-    } 1>&8
+    } 1>&2
 
-    # Eval curl command and break output into a temporary array, delimited by newline char.
-    IFS="${IFS_N}"
-    tmps=( $( eval "${curl_cmd[@]}"; printf 'CURL2ENV_EXT:%s' "${?}" ) )
-    IFS="${IFS_DEF}"
-
-    # Clear global curl2env variables.
-    for tmp in curl2env_{dbg,ext,hin,hdr,out,stt,ssl,unk}; do
-        printf -v tmp '%s=()' "${tmp}"
-        eval "${tmp}"
-    done
-
-    # Step through curl output and set global curl2env variables.
-    # I=-1 # Maybe for multiple calls in the future
-    I=0
-    for tmp in "${tmps[@]}"; do
+    # Call curl and perform initial parse of output.
+    {
         #
-        if [[ "${dbg}" -gt 7 ]]; then
-            printf '\n# itr [ %s ]\tstg ( %s )\n' "${I}" "${stg}"
-            declare -p tmp
-        fi 1>&8
+#if [[ -r curl2env_out ]]; then
+#curl2env_out="$( sed "s/___RGX_SESS___/${rgx_sess}/g" curl2env_out )"
+#else
+        # Eval curl command and store output.
+        curl2env_out="$(
+            eval "${curl_cmd[@]}"
+            printf %s \
+                ":${rgx_sess}" \
+                ":CURL2ENV_EXT:" \
+                "${?}" \
+                ":CURL2ENV_EXT:" \
+                "${rgx_sess}:"
+        )"
+#printf '%s\n' "${curl2env_out}" | sed "s/${rgx_sess}/___RGX_SESS___/g" > curl2env_out
+#fi
         #
-        # If this is an Info line..
-        if [[ "${tmp}" =~ ${rgx_info} ]]; then
+        I=-1
+        flg_rgx_nomatch=0
+        while [[ "${flg_rgx_nomatch}" -eq 0 ]]; do
             #
-            # If this is the beginning of a new connection..
-            if [[ "${BASH_REMATCH[2]}" = 'Adding handle: conn:'* ]]; then
-                stg='conn'
-                # Increment array index for this connection.
-                # let I++ # Maybe for multiple calls in the future
-                let I=0
+            let I++
+            flg_rgx_nomatch=1
+
+            if [[ "${curl2env_out}" =~ ${rgx_ext} ]]; then
+                curl2env_ext[${I}]="${BASH_REMATCH[2]}"
+                curl2env_out="${BASH_REMATCH[1]}${BASH_REMATCH[3]}"
+                flg_rgx_nomatch=0
+            elif [[ "${I}" -eq 0 ]]; then
+                printf -- "${fnc}: %s\n" "Could not parse out exit code. { ${?} }"
+                return "${err_rgx}"
             fi
-            if [[ "${dbg}" -gt 7 ]]; then
-                printf '\n# itr [ %s ]\tstg ( %s )\n' "${I}" "${stg}"
-                declare -p BASH_REMATCH
-            fi 1>&8
-            # Add info line to debug variable.
-            # Only add newline if variable already set.
-            curl2env_dbg[${I}]="${curl2env_dbg[${I}]:+${curl2env_dbg[${I}]}${tc_nln}}${tmp}"
-            # Next line.
-            continue
-            #
-        elif [[ "${tmp}" =~ ${rgx_xmit} ]]
-        then
-            #
-            # Set parsing stage based on what kind of transmission this is.
-            case "${BASH_REMATCH[3]}" in
-                ( 'Send header' )   stg='hin';;
-                ( 'Recv header' )   stg='hdr';;
-                ( 'Recv data' )     stg='out';;
-                ( 'Send data' )     stg='inp';;
-                ( 'Recv SSL data' ) stg='ssl';;
-                ( 'Send SSL data' ) stg='ssl';;
-                ( * )               stg='unk';;
-            esac
-            if [[ "${dbg}" -gt 7 ]]; then
-                printf '\n# itr [ %s ]\tstg ( %s )\n' "${I}" "${stg}"
-                declare -p BASH_REMATCH
-            fi 1>&8
-            # Add transmit line to debug variable.
-            curl2env_dbg[${I}]="${curl2env_dbg[${I}]:+${curl2env_dbg[${I}]}${tc_nln}}${tmp}"
-            continue
-            #
-        elif [[ "${tmp}" =~ ${rgx_stat} ]]
-        then
-            #
-            # This is a status line, parsed from the write-out output.
-            stg='stt'
-            if [[ "${dbg}" -gt 7 ]]; then
-                printf '\n# itr [ %s ]\tstg ( %s )\n' "${I}" "${stg}"
-                declare -p BASH_REMATCH
-            fi 1>&8
-            curl2env_stt[${I}]="${curl2env_stt[${I}]:+${curl2env_stt[${I}]}${tc_nln}}${BASH_REMATCH[1]}"
-            continue
-            #
-        elif [[ "${tmp}" =~ ${rgx_exit} ]]
-        then
-            #
-            # This is the exit code line, generated during evaluation of curl command.
-            stg='ext'
-            if [[ "${dbg}" -gt 7 ]]; then
-                printf '\n# itr [ %s ]\tstg ( %s )\n' "${I}" "${stg}"
-                declare -p BASH_REMATCH
-            fi 1>&8
-            curl2env_ext[0]="${BASH_REMATCH[1]}"
-            continue
-            #
-        elif [[ "${tmp}" =~ ${rgx_data} ]]
-        then
-            #
-            if [[ "${dbg}" -gt 7 ]]; then
-                printf '\n# itr [ %s ]\tstg ( %s )\n' "${I}" "${stg}"
-                declare -p BASH_REMATCH
-            fi 1>&8
-            #
-            # This is a data/header line.
-            # Regex groups only the raw hex codes.
-            tmp="${BASH_REMATCH[1]}"
-            # Ready the hex codes for conversion to text for storage.
-            tmp="${tmp// /\\x}"
-            if [[ "${dbg}" -gt 7 ]]; then
-                declare -p tmp
-            fi 1>&8
-            printf -v tmp "${tmp}"
-            # Store data in appropriate header/data variable.
-            if [[ "${dbg}" -gt 7 ]]; then
-                declare -p tmp
-            fi 1>&8
-            printf -v tmp 'curl2env_%s[${I}]="${curl2env_%s[${I}]}"%q' "${stg}" "${stg}" "${tmp}"
-            eval "${tmp}"
-            continue
-            #
+
+            if [[ "${curl2env_out}" =~ ${rgx_wrt} ]]; then
+                curl2env_wrt[${I}]="${BASH_REMATCH[2]%${tc_nln}}"
+                curl2env_out="${BASH_REMATCH[1]}${BASH_REMATCH[3]}"
+                flg_rgx_nomatch=0
+            elif [[ "${I}" -eq 0 ]]; then
+                printf -- "${fnc}: %s\n" "Could not parse write-out. { ${?} }"
+                return "${err_rgx}"
+            fi
+
+            if [[ "${curl2env_out}" =~ ${rgx_dbg} ]]; then
+                curl2env_dbg[${I}]="${BASH_REMATCH[2]}"
+                curl2env_out="${BASH_REMATCH[1]}${BASH_REMATCH[3]}"
+                flg_rgx_nomatch=0
+            elif [[ "${I}" -eq 0 ]]; then
+                printf -- "${fnc}: %s\n" "Could not parse out debug/trace. { ${?} }"
+                return "${err_rgx}"
+            fi
+
+        done
+        #
+    } 1>&2
+
+    # Check if we can keep the content of _out, or if it needs to be parsed from _dbg.
+    {
+        if [[ "${I}" -eq 1 && "${curl2env_wrt[0]}" =~ ${rgx_wrt_fe_nil} ]]; then
+            flg_out_keep=1
+#curl2env_out=()
         else
+            flg_out_keep=0
+            curl2env_out=()
+        fi
+    } 1>&2
+
+    # Further parsing of curl output.
+    {
+        #
+        while [[ "${I}" -gt 0 ]]; do
             #
-            # Catch unidentified lines.
-            stg='unk'
-            if [[ "${dbg}" -gt 7 ]]; then
-                printf '\n# itr [ %s ]\tstg ( %s )\n' "${I}" "${stg}"
-                declare -p tmp
-            fi 1>&8
-            curl2env_unk[${I}]="${curl2env_unk[${I}]:+${curl2env_unk[${I}]}${tc_nln}}${tmp}"
-            continue
+            let I--
             #
+            if [[ "${curl2env_wrt[${I}]}" =~ ${rgx_wrt_redirs} ]]; then
+                cnt_wrt_redirs="${BASH_REMATCH[2]}"
+            else
+                cnt_wrt_redirs=0
+            fi
+            #
+            if [[ "${dbg}" -ge 8 ]]; then
+                printf '\n# itr [ %s ]\trdr ( %s )\n' "${I}" "${cnt_wrt_redirs}"
+            fi
+            #
+            printf -v rgx_dbg_slice %s \
+                '^' \
+                '((.*['"${tc_nln}"']'"${rgx_dbg_close}"')*['"${tc_nln}"'])?' \
+                '((.*['"${tc_nln}"']'"${rgx_dbg_close}"')['"${tc_nln}"'])' \
+                '{'"${cnt_wrt_redirs}"'}' \
+                '(.*['"${tc_nln}"']'"${rgx_dbg_close}"')' \
+                '(['"${tc_nln}"'].*)?' \
+                '$'
+            #
+            if [[ "${curl2env_dbg}" =~ ${rgx_dbg_slice} ]]; then
+                curl2env_dbg[${I}]="${BASH_REMATCH[9]}"
+                if [[ "${I}" -ne 0 ]]; then
+                    curl2env_dbg="${BASH_REMATCH[2]}"
+                    curl2env_ext[${I}]="${curl2env_ext[0]}"
+                fi
+            else
+                printf -- "${fnc}: %s\n" "Could not parse out debug/trace for this call. { ${?} }"
+                return "${err_rgx}"
+            fi
+            #
+            curl2env_tmp="${curl2env_dbg[${I}]}"
+            curl2env_dbg[${I}]=
+            stg='???'
+            #
+            while [[ "${curl2env_tmp}" =~ ${rgx_ent} ]]; do
+                #
+                curl2env_tmp="${BASH_REMATCH[2]}"
+                ent="${BASH_REMATCH[1]:-${BASH_REMATCH[3]}}"
+                #
+                if [[ "${dbg}" -ge 8 ]]; then
+                    printf '\n# itr [ %s ]\tstg > %s >\n' "${I}" "${stg}"
+                fi
+                #
+                # If this is an Info line..
+                if [[ "${ent}" =~ ${rgx_ent_info} ]]; then
+                    #
+                    stg='dbg'
+                    if [[ "${dbg}" -ge 8 ]]; then
+                        printf '# itr [ %s ]\t%s ( %s )\n' "${I}" "${stg}" "${ent}"
+                    fi
+                    # Add info line to debug variable.
+                    # Only add newline if variable already set.
+                    curl2env_dbg[${I}]="${curl2env_dbg[${I}]:+${curl2env_dbg[${I}]}${tc_nln}}${ent}"
+                    #
+                elif [[ "${ent}" =~ ${rgx_ent_xmit} ]]; then
+                    #
+                    cnt_xmit_size="${BASH_REMATCH[6]}"
+                    cnt_xmit_done=0
+                    #
+                    # Set parsing stage based on what kind of transmission this is.
+                    case "${BASH_REMATCH[3]}" in
+                        ( 'Send header' )   stg='hin';;
+                        ( 'Recv header' )   stg='hdr';;
+                        ( 'Recv data' )     stg='out';;
+                        ( 'Send data' )     stg='inp';;
+                        ( * )               stg='unk';;
+                    esac
+                    if [[ "${dbg}" -ge 8 ]]; then
+                        printf '# itr [ %s ]\t%s ( %s )\n' "${I}" "${stg}" "${ent}"
+                        printf '# itr [ %s ]\t%s = %s/%s\n' "${I}" "${stg}" "${cnt_xmit_done}" "${cnt_xmit_size}"
+                    fi
+                    # Add transmit line to debug variable.
+                    curl2env_dbg[${I}]="${curl2env_dbg[${I}]:+${curl2env_dbg[${I}]}${tc_nln}}${ent}"
+                    #
+                elif [[ "${ent}" =~ ${rgx_ent_data} ]]; then
+                    #
+                    if [[ "${stg}" == 'out' && "${flg_out_keep}" -eq 1 ]]; then
+                        continue
+                    fi
+                    #
+                    if [[ "${dbg}" -ge 8 ]]; then
+                        printf '# itr [ %s ]\t%s ( %s )\n' "${I}" "${stg}" "${ent}"
+                    fi
+                    #
+                    # This is a data/header line.
+                    # Regex groups only the raw hex codes.
+                    tmp="${BASH_REMATCH[1]}"
+                    # Ready the hex codes for conversion to text for storage.
+                    tmp="${tmp// /\\x}"
+                    if [[ "${dbg}" -ge 8 ]]; then
+                        printf '# itr [ %s ]\t%s > %s >\n' "${I}" "${stg}" "${tmp}"
+                    fi
+                    printf -v tmp "${tmp}"
+                    #
+                    let cnt_xmit_done+=${#tmp}
+                    #
+                    if [[ "${dbg}" -ge 8 ]]; then
+                        printf '# itr [ %s ]\t%s < %q <\n' "${I}" "${stg}" "${tmp}"
+                        printf '# itr [ %s ]\t%s = %s/%s\n' "${I}" "${stg}" "${cnt_xmit_done}" "${cnt_xmit_size}"
+                    fi
+                    #
+                    # Store data in appropriate header/data variable.
+                    printf -v tmp 'curl2env_%s[${I}]="${curl2env_%s[${I}]}"%q' "${stg}" "${stg}" "${tmp}"
+                    eval "${tmp}"
+                    #
+                    if [[ "${cnt_xmit_done}" -eq "${cnt_xmit_size}" ]]; then
+                        if [[ "${stg}" == 'hdr' || "${stg}" == 'hin' ]]; then
+                            printf -v tmp 'tmp="${curl2env_%s[${I}]}"' "${stg}"
+                            eval "${tmp}"
+                            if [[ "${tmp}" =~ ${tc_crlf}${tc_crlf}$ ]]; then
+                                tmp="${tmp//${tc_crlf}/${tc_nln}}"
+                                tmp="${tmp%${tc_nln}${tc_nln}}"
+                                if [[ "${stg}" == 'hdr' ]]; then
+                                    hdr_stat="${tmp%%${tc_nln}*}"
+                                    if [[ "${tmp}" =~ ${rgx_hdr_ct} ]]; then
+                                        hdr_ct="${BASH_REMATCH[3]}"
+                                    else
+                                        hdr_ct=
+                                    fi
+                                    if [[ "${tmp}" =~ ${rgx_hdr_te} ]]; then
+                                        hdr_te="${BASH_REMATCH[3]}"
+                                    else
+                                        hdr_te=
+                                    fi
+                                    if [[ "${hdr_te}" == *[Cc]hunked* ]]; then
+                                        flg_chnk_enc=1
+                                    else
+                                        flg_chnk_enc=0
+                                    fi
+                                fi
+                            fi
+                            printf -v tmp 'curl2env_%s[${I}]=%q' "${stg}" "${tmp}"
+                            eval "${tmp}"
+                        fi
+                        stg='dbg'
+                    else
+                        continue
+                    fi
+                    #
+                else
+                    #
+                    # Catch unidentified lines.
+                    stg='unk'
+                    if [[ "${dbg}" -ge 8 ]]; then
+                        printf '# itr [ %s ]\t%s ( %s )\n' "${I}" "${stg}" "${ent}"
+                    fi
+                    curl2env_unk[${I}]="${curl2env_unk[${I}]:+${curl2env_unk[${I}]}${tc_nln}}${ent}"
+                    #
+                fi
+                #
+                if [[ "${dbg}" -ge 8 ]]; then
+                    printf '# itr [ %s ]\tstg < %s <\n' "${I}" "${stg}"
+                fi
+                #
+            done
+            #
+            if [[ "${flg_chnk_enc}" -eq 1 && "${flg_out_keep}" -eq 0 ]]; then
+                tmp="${curl2env_out[${I}]}"
+                curl2env_out[${I}]=
+                while [[ "${tmp}" =~ ^([^${tc_crlf}]*)${tc_crlf}(.*)$ ]]; do
+                    printf -v cnt_chnk_size %d "0x${BASH_REMATCH[1]}"
+                    tmp="${BASH_REMATCH[2]}"
+                    rgx='^(.{'"${cnt_chnk_size}"'})'"${tc_crlf}"'(.*)$'
+                    if [[ "${tmp}" =~ ${rgx} ]]; then
+                        if [[ "${dbg}" -ge 8 ]]; then
+                            printf '\n# chnk [ %s ]\n' "${cnt_chnk_size}"
+                            if [[ -n "${BASH_REMATCH[1]}" ]]; then
+                                printf '%s\n' "${BASH_REMATCH[1]}"
+                            fi
+                        fi
+                        curl2env_out[${I}]="${curl2env_out[${I}]}${BASH_REMATCH[1]}"
+                        tmp="${BASH_REMATCH[2]}"
+                    else
+                        printf -- "${fnc}: %s\n" "Could not parse out chunk encoding. { ${?} }"
+                        return "${err_rgx}"
+                    fi
+                done
+            fi
+            #
+        done
+        #
+        if [[ "${dbg}" -ge 8 ]]; then
+            for tmp in ${vars_ag_[*]}; do
+                printf '\n#\n## %s\n#\n' "${tmp}"
+                printf -v tmp 'tmps=( "${%s[@]}" )' "${tmp}"
+                eval "${tmp}"
+                for (( tmp=0; tmp<${#tmps[@]}; tmp++ )); do
+                    printf '[%s]\n%s\n' "${tmp}" "${tmps[${tmp}]}"
+                done
+            done
         fi
         #
-    done
+    } 1>&2
 
-    # Convert '\r\n' to '\n' in header variables; Also remove all '\n' from the very end.
-    for (( I=0; I<${#curl2env_hin[@]}; I++ ))
-    do
-        curl2env_hin[${I}]="${curl2env_hin[${I}]//${tc_crt}${tc_nln}/${tc_nln}}"
-        curl2env_hin[${I}]="${curl2env_hin[${I}]%${tc_nln}${tc_nln}}"
-    done
-    for (( I=0; I<${#curl2env_hdr[@]}; I++ ))
-    do
-        curl2env_hdr[${I}]="${curl2env_hdr[${I}]//${tc_crt}${tc_nln}/${tc_nln}}"
-        curl2env_hdr[${I}]="${curl2env_hdr[${I}]%${tc_nln}${tc_nln}}"
-        curl2env_out[${I}]="${curl2env_out[${I}]//${tc_crt}${tc_nln}/${tc_nln}}"
-        if [[ "${curl2env_hdr[${I}]}" =~ ${rgx_hdr_chunked} ]]; then
-            curl2env_out[${I}]="${curl2env_out[${I}]#*${tc_nln}}"
-            curl2env_out[${I}]="${curl2env_out[${I}]%${tc_nln}*}"
-            curl2env_out[${I}]="${curl2env_out[${I}]%${tc_nln}*}"
-            curl2env_out[${I}]="${curl2env_out[${I}]%${tc_nln}*}"
-        fi
-    done
+#for (( K=1; K<${#BASH_REMATCH[@]}; K++ )); do printf '[%s]\n%q\n' "${K}" "${BASH_REMATCH[${K}]}"; done
 
-    # Assign curl exit code to function exit code.
-    fnc_return="${curl2env_ext[0]:-100}"
+    {
+        #
+        for (( I=0; I<${#curl2env_dbg[@]}; I++ )); do
+            #
+            # Debugging output.
+            if [[ "${dbg}" -eq 1 ]]; then
+                printf '%s | %s | %s\n' "${hdr_stat}" "${hdr_ct}" "${hdr_te}"
+            elif [[ "${dbg}" -le 7 ]]; then
+                if [[ "${dbg}" -ge 4 && "${#curl2env_dbg[${I}]}" -gt 0 ]]; then
+                    printf "*${I}* %s\n" "${curl2env_dbg[${I}]//${tc_nln}/${tc_nln}*${I}* }"
+                fi
+                if [[ "${dbg}" -ge 6 && "${#curl2env_unk[${I}]}" -gt 0 ]]; then
+                    printf "?${I}? %s\n" "${curl2env_unk[${I}]//${tc_nln}/${tc_nln}?${I}? }"
+                fi
+                if [[ "${dbg}" -ge 5 && "${#curl2env_wrt[${I}]}" -gt 0 ]]; then
+                    printf "=${I}= %s\n" "${curl2env_wrt[${I}]//${tc_nln}/${tc_nln}=${I}= }"
+                fi
+                if [[ "${dbg}" -ge 3 && "${#curl2env_hin[${I}]}" -gt 0 ]]; then
+                    printf ">${I}> %s\n" "${curl2env_hin[${I}]//${tc_nln}/${tc_nln}>${I}> }"
+                fi
+                if [[ "${dbg}" -ge 2 && "${#curl2env_hdr[${I}]}" -gt 0 ]]; then
+                    printf "<${I}< %s\n" "${curl2env_hdr[${I}]//${tc_nln}/${tc_nln}<${I}< }"
+                fi
+                if [[ "${dbg}" -ge 4 && "${#curl2env_out[${I}]}" -gt 0 ]]; then
+                    printf ".${I}. %s\n" "${curl2env_out[${I}]//${tc_nln}/${tc_nln}.${I}. }"
+                fi
+                if [[ "${dbg}" -ge 4 && "${#curl2env_ext[${I}]}" -gt 0 ]]; then
+                    printf "!${I}! %s\n" "${curl2env_ext[${I}]//${tc_nln}/${tc_nln}!${I}! }"
+                fi
+            fi
+            #
+        done
+        #
+        # Assign curl exit code to function exit code.
+        fnc_return="${curl2env_ext[0]}"
+        #
+    } 1>&2
 
-    # Debugging output.
-    if [[ "${dbg}" -lt 8 ]]; then
-        I=0
-        #[[ "${dbg}" -lt 3 ]] || printf '\n'
-        [[ "${dbg}" -lt 4 ]] || printf '* %s\n' "${curl2env_dbg[${I}]//${tc_nln}/${tc_nln}* }"
-        [[ "${dbg}" -lt 5 ]] || printf '= %s\n' "${curl2env_stt[${I}]//${tc_nln}/${tc_nln}= }"
-        if [[ "${dbg}" -gt 2 ]]; then
-            printf '> %s\n' "${curl2env_hin[${I}]//${tc_nln}/${tc_nln}> }"
-            printf '< %s\n' "${curl2env_hdr[${I}]//${tc_nln}/${tc_nln}< }"
-        elif [[ "${dbg}" -gt 0 ]]; then
-            printf '< %s\n' "${curl2env_hdr[${I}]%%${tc_nln}*}"
+    {
+        #
+        if [[ "${opt_out:-0}" -eq 0 ]]; then
+            if [[ "${flg_file1}" -eq 0 ]]; then
+                declare -p ${vars_ag_[*]}
+            fi
+        else
+            printf '%s\n' "${curl2env_out[@]}"
         fi
-        if [[ "${dbg}" -gt 4 && "${#curl2env_unk[${I}]}" -gt 0 ]]; then
-            printf '? %s\n' "${curl2env_unk[${I}]//${tc_nln}/${tc_nln}? }"
-        fi
-        printf '%s\n' "${curl2env_out[${I}]%${tc_nln}}" 1>&7
-        [[ "${dbg}" -lt 6 ]] || printf '! %s\n' "${curl2env_ext[${I}]//${tc_nln}/${tc_nln}! }"
-    fi 1>&8
+        #
+    }
 
     # Return the value of 'fnc_return' variable.
     return "${fnc_return}"
