@@ -577,7 +577,7 @@ function curl2env ()
                     printf "<${I}< %s\n" "${curl2env_hdr[${I}]//${tc_nln}/${tc_nln}<${I}< }"
                 fi
                 if [[ "${dbg#-}" -ge 4 && "${#curl2env_out[${I}]}" -gt 0 ]]; then
-                    printf ".${I}. %s\n" "${curl2env_out[${I}]//${tc_nln}/${tc_nln}.${I}. }"
+                    printf ".${I}. %q\n" "${curl2env_out[${I}]}"
                 fi
                 if [[ "${dbg#-}" -ge 4 && "${#curl2env_ext[${I}]}" -gt 0 ]]; then
                     printf "!${I}! %s\n" "${curl2env_ext[${I}]//${tc_nln}/${tc_nln}!${I}! }"
@@ -598,7 +598,7 @@ function curl2env ()
                 declare -p ${vars_ag_[*]}
             fi
         else
-            printf '%s\n' "${curl2env_out[@]}"
+            printf %s "${curl2env_out[@]}"
         fi
         #
     }
