@@ -3,7 +3,7 @@
 function curl2env ()
 {
 
-    # BASH_FUNCTION_INIT # INIT # YOUR CODE HERE # START
+    #bash_function_init#$init
 
     # Additions to opts_valid go here.
     opts_valid=(
@@ -72,11 +72,7 @@ function curl2env ()
     )
     vars_ig_=()
 
-    # BASH_FUNCTION_INIT # INIT # YOUR CODE HERE # FINISH
-
-    # BASH_FUNCTION_INIT # SETUP # DO NOT TOUCH # INSERT
-
-    # BASH_FUNCTION_INIT # MAIN # YOUR CODE HERE # START
+    #bash_function_init#$load
 
     # Special developer debug mode! :D
     if [[ "${dbg}" -lt 0 ]]; then
@@ -605,7 +601,5 @@ function curl2env ()
 
     # Return the value of 'fnc_return' variable.
     return "${fnc_return}"
-
-    # BASH_FUNCTION_INIT # MAIN # YOUR CODE HERE # FINISH
 
 }
